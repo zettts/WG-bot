@@ -183,14 +183,14 @@ async def renew_cmd(message: Message, bot: Bot):
         if price_info["discount_percent"] > 0:
             discount_text = f" (-{price_info['discount_percent']}%)"
             
-        button_text = f"{months} мес. - {final_price} руб.{discount_text}"
+        button_text = f"{months} мес. - ⭐ {final_price}{discount_text}"
         builder.button(text=button_text, callback_data=f"pay_{months}")
     
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
     
     await message.answer(
-        "💵 **Выберите период подписки:**",
+        "⭐ **Выберите период подписки:**",
         reply_markup=builder.as_markup(),
         parse_mode='Markdown'
     )
@@ -379,14 +379,14 @@ async def renew_subscription(callback: CallbackQuery):
         if price_info["discount_percent"] > 0:
             discount_text = f" (-{price_info['discount_percent']}%)"
             
-        button_text = f"{months} мес. - {final_price} руб.{discount_text}"
+        button_text = f"{months} мес. - ⭐ {final_price}{discount_text}"
         builder.button(text=button_text, callback_data=f"pay_{months}")
     
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
     
     await callback.message.edit_text(
-        "💵 **Выберите период подписки:**",
+        "⭐ **Выберите период подписки:**",
         reply_markup=builder.as_markup(),
         parse_mode='Markdown'
     )
@@ -404,19 +404,17 @@ async def process_payment(callback: CallbackQuery, bot: Bot):
         final_price = config.calculate_price(months)
         suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
         # Создаем инвойс для оплаты
-        prices = [LabeledPrice(label=f"VPN подписка на {months} мес.", amount=final_price * 100)]
+        prices = [LabeledPrice(label=f"VPN подписка на {months} мес.", amount=final_price)]
         if config.PAYMENT_TOKEN:
             await bot.send_invoice(
                 chat_id=callback.from_user.id,
                 title=f"VPN подписка на {months} месяцев",
                 description=f"Доступ к VPN сервису на {months} {suffix}",
                 payload=f"subscription_{months}",
-                provider_token=config.PAYMENT_TOKEN,
-                currency="RUB",
+                provider_token="",
+                currency="XTR",
                 prices=prices,
                 start_parameter="create_subscription",
-                need_email=True,
-                need_phone_number=False
             )
         else:
             await callback.message.answer("❌ Оплата временно недоступна")
@@ -435,7 +433,7 @@ async def process_successful_payment(message: Message, bot: Bot):
         payload = message.successful_payment.invoice_payload
         if payload.startswith("subscription_"):
             months = int(payload.split("_")[1])
-            final_price = config.calculate_price(months)  # Переводим обратно в рубли
+            final_price = config.calculate_price(months)  # Пересчитываем стоимость в звёздах
             
             # Получаем информацию о пользователе
             user = await get_user(message.from_user.id)
@@ -476,7 +474,7 @@ async def process_successful_payment(message: Message, bot: Bot):
                 admin_message = (
                     f"{action_type.capitalize()} подписка пользователем "
                     f"`{user.full_name}` | `{user.telegram_id}` "
-                    f"на {months} {suffix} - {final_price}₽"
+                    f"на {months} {suffix} - ⭐ {final_price}"
                 )
                 
                 for admin_id in config.ADMINS:

@@ -36,10 +36,10 @@ class Config(BaseModel):
 
     # Настройки цен и скидок
     PRICES: Dict[int, Dict[str, int]] = {
-        1: {"base_price": 100, "discount_percent": 0},
-        3: {"base_price": 300, "discount_percent": 10},
-        6: {"base_price": 600, "discount_percent": 20},
-        12: {"base_price": 1200, "discount_percent": 30}
+        1: {"base_price": 250, "discount_percent": 0},
+        3: {"base_price": 750, "discount_percent": 10},
+        6: {"base_price": 1500, "discount_percent": 20},
+        12: {"base_price": 3000, "discount_percent": 30}
     }
     SUBSCRIPTION_URL_BASE: str = os.getenv("SUBSCRIPTION_URL_BASE", "")
 
