@@ -15,8 +15,7 @@ class User(Base):
     username = Column(String)
     registration_date = Column(DateTime, default=datetime.utcnow)
     subscription_end = Column(DateTime)
-    vless_profile_id = Column(String)
-    vless_profile_data = Column(String)
+    awg_profile_data = Column(String)
     is_admin = Column(Boolean, default=False)
     notified = Column(Boolean, default=False)
 
@@ -24,7 +23,7 @@ class StaticProfile(Base):
     __tablename__ = 'static_profiles'
     id = Column(Integer, primary_key=True)
     name = Column(String)
-    vless_url = Column(String)
+    awg_config = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 engine = create_engine('sqlite:///users.db', echo=False)
@@ -66,7 +65,7 @@ async def delete_user_profile(telegram_id: int):
     with Session() as session:
         user = session.query(User).filter_by(telegram_id=telegram_id).first()
         if user:
-            user.vless_profile_data = None
+            user.awg_profile_data = None
             user.notified = False
             session.commit()
             logger.info(f"✅ User profile deleted: {telegram_id}")
@@ -108,9 +107,9 @@ async def get_all_users(with_subscription: bool = None):
                 query = query.filter(User.subscription_end <= datetime.utcnow())
         return query.all()
 
-async def create_static_profile(name: str, vless_url: str):
+async def create_static_profile(name: str, awg_config: str):
     with Session() as session:
-        profile = StaticProfile(name=name, vless_url=vless_url)
+        profile = StaticProfile(name=name, awg_config=awg_config)
         session.add(profile)
         session.commit()
         logger.info(f"✅ Static profile created: {name}")
@@ -130,7 +129,7 @@ async def get_user_stats():
 async def get_users_with_profiles():
     """Получает всех пользователей с профилями"""
     with Session() as session:
-        return session.query(User).filter(User.vless_profile_data.isnot(None)).all()
+        return session.query(User).filter(User.awg_profile_data.isnot(None)).all()
 
 async def fix_all_subscription_dates():
     """Исправляет все некорректные даты подписок в базе данных"""
@@ -163,11 +162,11 @@ async def delete_user(telegram_id: int) -> bool:
         user = session.query(User).filter_by(telegram_id=telegram_id).first()
         if user:
             # Сначала удаляем профиль из 3x-ui если он есть
-            if user.vless_profile_data:
+            if user.awg_profile_data:
                 try:
                     from functions import delete_client_by_email
                     import json
-                    profile_data = json.loads(user.vless_profile_data)
+                    profile_data = json.loads(user.awg_profile_data)
                     email = profile_data.get("email")
                     if email:
                         delete_result = await delete_client_by_email(email)

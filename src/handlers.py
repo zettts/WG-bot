@@ -206,7 +206,7 @@ async def connect_cmd(message: Message, bot: Bot):
         await message.answer("⚠️ Подписка истекла! Продлите подписку.")
         return
 
-    if not user.vless_profile_data:
+    if not user.awg_profile_data:
         await message.answer("⚙️ Создаем ваш VPN профиль...")
         profile_data = await create_awg_profile(user.telegram_id)
 
@@ -214,14 +214,14 @@ async def connect_cmd(message: Message, bot: Bot):
             with Session() as session:
                 db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
                 if db_user:
-                    db_user.vless_profile_data = json.dumps(profile_data)
+                    db_user.awg_profile_data = json.dumps(profile_data)
                     session.commit()
             user = await get_user(user.telegram_id)
         else:
             await message.answer("🛑 Ошибка при создании профиля. Попробуйте позже.")
             return
 
-    profile_data = safe_json_loads(user.vless_profile_data, default={})
+    profile_data = safe_json_loads(user.awg_profile_data, default={})
     if not profile_data or not profile_data.get("config"):
         await message.answer("⚠️ У вас пока нет созданного профиля.")
         return
@@ -253,12 +253,12 @@ async def connect_cmd(message: Message, bot: Bot):
 async def stats_cmd(message: Message, bot: Bot):
     """Слеш команда для показа статистики"""
     user = await get_user(message.from_user.id)
-    if not user or not user.vless_profile_data:
+    if not user or not user.awg_profile_data:
         await message.answer("⚠️ Профиль не создан")
         return
 
     await message.answer("⚙️ Загружаем вашу статистику...")
-    profile_data = safe_json_loads(user.vless_profile_data, default={})
+    profile_data = safe_json_loads(user.awg_profile_data, default={})
     client_id = profile_data.get("client_id")
     stats = await get_client_stats(client_id) if client_id else {"state": "not_found"}
 
@@ -708,40 +708,28 @@ async def static_profile_add(callback: CallbackQuery, state: FSMContext):
 async def process_static_profile_name(message: Message, state: FSMContext):
     profile_name = message.text
     profile_data = await create_static_client(profile_name)
-    
+
     if profile_data:
-        vless_url = generate_vless_url(profile_data)
-        sub_id = profile_data.get("sub_id")
-        sub_url = generate_sub_url(sub_id) if sub_id else vless_url
-        
-        # Генерация QR-кода локально
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(sub_url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        # Сохранение в буфер
-        img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
-        photo = BufferedInputFile(img_byte_arr.getvalue(), filename="qr.png")
-        
-        await create_static_profile(profile_name, sub_url)
+        config_file = BufferedInputFile(
+            profile_data["config"].encode("utf-8"),
+            filename="vpn.conf",
+        )
+
+        await create_static_profile(profile_name, profile_data["config"])
         profiles = await get_static_profiles()
         for profile in profiles:
             if profile.name == profile_name:
                 id = profile.id
         builder = InlineKeyboardBuilder()
         builder.button(text="🗑️ Удалить", callback_data=f"delete_static_{id}")
-        await message.answer_photo(
-            photo=photo,
-            caption=f"Профиль создан!\n\n`{sub_url}`", 
-            reply_markup=builder.as_markup(), 
-            parse_mode='Markdown'
+        await message.answer_document(
+            document=config_file,
+            caption=f"Профиль создан: {profile_name}",
+            reply_markup=builder.as_markup(),
         )
     else:
         await message.answer("Ошибка при создании профиля")
-    
+
     await state.clear()
 
 @router.callback_query(F.data == "static_profile_list")
@@ -757,7 +745,7 @@ async def static_profile_list(callback: CallbackQuery):
         
         # Генерация QR-кода локально
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(profile.vless_url)
+        qr.add_data(profile.awg_config)
         qr.make(fit=True)
         img = qr.make_image(fill_color="black", back_color="white")
         
@@ -769,7 +757,7 @@ async def static_profile_list(callback: CallbackQuery):
         
         await callback.message.answer_photo(
             photo=photo,
-            caption=f"**{profile.name}**\n`{profile.vless_url}`", 
+            caption=f"**{profile.name}**\n`{profile.awg_config}`", 
             reply_markup=builder.as_markup(), 
             parse_mode='Markdown'
         )
@@ -809,7 +797,7 @@ async def connect_profile(callback: CallbackQuery):
         await callback.answer("⚠️ Подписка истекла! Продлите подписку.")
         return
 
-    if not user.vless_profile_data:
+    if not user.awg_profile_data:
         await callback.message.edit_text("⚙️ Создаем ваш VPN профиль...")
         profile_data = await create_awg_profile(user.telegram_id)
 
@@ -817,14 +805,14 @@ async def connect_profile(callback: CallbackQuery):
             with Session() as session:
                 db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
                 if db_user:
-                    db_user.vless_profile_data = json.dumps(profile_data)
+                    db_user.awg_profile_data = json.dumps(profile_data)
                     session.commit()
             user = await get_user(user.telegram_id)
         else:
             await callback.message.answer("🛑 Ошибка при создании профиля. Попробуйте позже.")
             return
 
-    profile_data = safe_json_loads(user.vless_profile_data, default={})
+    profile_data = safe_json_loads(user.awg_profile_data, default={})
     if not profile_data or not profile_data.get("config"):
         await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
         return
@@ -856,11 +844,11 @@ async def connect_profile(callback: CallbackQuery):
 @router.callback_query(F.data == "stats")
 async def user_stats(callback: CallbackQuery):
     user = await get_user(callback.from_user.id)
-    if not user or not user.vless_profile_data:
+    if not user or not user.awg_profile_data:
         await callback.answer("⚠️ Профиль не создан")
         return
     await callback.message.edit_text("⚙️ Загружаем вашу статистику...")
-    profile_data = safe_json_loads(user.vless_profile_data, default={})
+    profile_data = safe_json_loads(user.awg_profile_data, default={})
     stats = await get_user_stats(profile_data["email"])
 
     logger.debug(stats)
@@ -918,9 +906,9 @@ async def admin_fix_profiles(callback: CallbackQuery):
         fail_count = 0
         
         for user in users:
-            if user.vless_profile_data:
+            if user.awg_profile_data:
                 try:
-                    profile_data = safe_json_loads(user.vless_profile_data, default={})
+                    profile_data = safe_json_loads(user.awg_profile_data, default={})
                     email = profile_data.get("email")
                     if email:
                         result = await force_update_profile_expiry(email, user.subscription_end)
@@ -1053,7 +1041,7 @@ async def admin_delete_user_process(message: Message, state: FSMContext):
             f"🆔 **Telegram ID:** `{user.telegram_id}`\n"
             f"📅 **Регистрация:** `{user.registration_date.strftime('%d-%m-%Y %H:%M')}`\n"
             f"⏰ **Подписка до:** `{user.subscription_end.strftime('%d-%m-%Y %H:%M')}`\n"
-            f"🔧 **Профиль:** `{'Есть' if user.vless_profile_data else 'Нет'}`\n\n"
+            f"🔧 **Профиль:** `{'Есть' if user.awg_profile_data else 'Нет'}`\n\n"
             f"❗️ **Это действие необратимо!**"
         )
         
