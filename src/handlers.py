@@ -888,20 +888,13 @@ async def user_stats(callback: CallbackQuery):
 async def network_stats(callback: CallbackQuery):
     stats = await get_global_stats()
 
-    upload = f"{stats.get('upload', 0) / 1024 / 1024:.2f}"
-    upload_size = 'MB' if int(float(upload)) < 1024 else 'GB'
-    if upload_size == "GB":
-        upload = f"{int(float(upload) / 1024):.2f}"
+    download_mbps = stats.get("download", 0) / 1_000_000
+    upload_mbps = stats.get("upload", 0) / 1_000_000
 
-    download = f"{stats.get('download', 0) / 1024 / 1024:.2f}"
-    download_size = 'MB' if int(float(download)) < 1024 else 'GB'
-    if download_size == "GB":
-        download = f"{int(float(download) / 1024):.2f}"
-    
     await callback.answer()
     text = (
-        "📊 **Статистика использования сети:**\n\n"
-        f"🔼 Upload - `{upload} {upload_size}` | 🔽 Download - `{download} {download_size}`"
+        "📊 **Статистика сети (сейчас):**\n\n"
+        f"🔼 Upload - `{upload_mbps:.2f} Мбит/с` | 🔽 Download - `{download_mbps:.2f} Мбит/с`"
     )
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад", callback_data="admin_menu")
