@@ -214,3 +214,15 @@ async def create_static_client(profile_name: str):
         return None
     finally:
         await api.close()
+
+
+async def delete_client_by_name(name: str) -> bool:
+    """Находит клиента по имени и удаляет его (для статических профилей)."""
+    api = PanelAPI()
+    try:
+        client_id = await api.find_client_id_by_name(name)
+        if not client_id:
+            return False
+        return await api.delete_client(client_id)
+    finally:
+        await api.close()

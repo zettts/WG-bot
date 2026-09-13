@@ -17,7 +17,7 @@ from database import (
     User, Session, get_user_stats as db_user_stats, delete_user
 )
 from functions import (
-    create_awg_profile, delete_client_by_id,
+    create_awg_profile, delete_client_by_id, delete_client_by_name,
     get_client_stats, create_static_client, get_global_stats,
     get_online_users,
 )
@@ -773,7 +773,7 @@ async def handle_delete_static_profile(callback: CallbackQuery):
                 await callback.answer("⚠️ Профиль не найден")
                 return
             
-            success = await delete_client_by_email(profile.name)
+            success = await delete_client_by_name(profile.name)
             if not success:
                 logger.error(f"🛑 Ошибка удаления клиента из инбаунда: {profile.name}")
             
