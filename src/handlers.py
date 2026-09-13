@@ -285,17 +285,11 @@ async def stats_cmd(message: Message, bot: Bot):
         handshake_text = f"{handshake_age // 60} мин. назад"
 
     text = (
-        "📊 **Статус подключения:**
-
-"
-        f"{state_text}
-"
-        f"⬇️ Скорость сейчас: `{download_mbps:.2f} Мбит/с`
-"
-        f"⬆️ Скорость сейчас: `{upload_mbps:.2f} Мбит/с`
-"
-        f"🤝 Последнее подключение: `{handshake_text}`
-"
+        "📊 **Статус подключения:**\n\n"
+        f"{state_text}\n"
+        f"⬇️ Скорость сейчас: `{download_mbps:.2f} Мбит/с`\n"
+        f"⬆️ Скорость сейчас: `{upload_mbps:.2f} Мбит/с`\n"
+        f"🤝 Последнее подключение: `{handshake_text}`\n"
     )
 
     builder = InlineKeyboardBuilder()
