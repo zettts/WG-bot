@@ -6,6 +6,7 @@ import coloredlogs
 from config import config
 from aiogram import Bot, Dispatcher
 from aiogram.types import PreCheckoutQuery
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from handlers import setup_handlers
 from datetime import datetime, timedelta
 from functions import set_client_enabled
@@ -28,9 +29,12 @@ async def check_subscriptions(bot: Bot):
                 # Проверка за 1 день до окончания
                 if user.subscription_end - now < timedelta(days=1) and user.subscription_end >= now and not user.notified:
                     try:
+                        builder = InlineKeyboardBuilder()
+                        builder.button(text="🔄 Продлить подписку", callback_data="renew_now")
                         await bot.send_message(
                             user.telegram_id,
-                            "⚠️ Ваша подписка истекает через 24 часа! Продлите подписку, чтобы сохранить доступ."
+                            "⚠️ Ваша подписка истекает через 24 часа! Продлите подписку, чтобы сохранить доступ.",
+                            reply_markup=builder.as_markup()
                         )
                         # Помечаем как уведомленного
                         with Session() as session:
