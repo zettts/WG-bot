@@ -257,31 +257,50 @@ async def stats_cmd(message: Message, bot: Bot):
     if not user or not user.vless_profile_data:
         await message.answer("⚠️ Профиль не создан")
         return
-    
+
     await message.answer("⚙️ Загружаем вашу статистику...")
     profile_data = safe_json_loads(user.vless_profile_data, default={})
-    stats = await get_user_stats(profile_data["email"])
+    client_id = profile_data.get("client_id")
+    stats = await get_client_stats(client_id) if client_id else {"state": "not_found"}
 
     logger.debug(stats)
-    upload = f"{stats.get('upload', 0) / 1024 / 1024:.2f}"
-    upload_size = 'MB' if int(float(upload)) < 1024 else 'GB'
-    if upload_size == "GB":
-        upload = f"{int(float(upload) / 1024):.2f}"
 
-    download = f"{stats.get('download', 0) / 1024 / 1024:.2f}"
-    download_size = 'MB' if int(float(download)) < 1024 else 'GB'
-    if download_size == "GB":
-        download = f"{int(float(download) / 1024):.2f}"
+    state = stats.get("state", "unknown")
+    state_labels = {
+        "online": "🟢 В сети",
+        "offline": "⚪️ Не в сети",
+        "disabled": "🔴 Отключен",
+    }
+    state_text = state_labels.get(state, "❓ Неизвестно")
+
+    download_mbps = (stats.get("downloadBps") or 0) / 1_000_000
+    upload_mbps = (stats.get("uploadBps") or 0) / 1_000_000
+
+    handshake_age = stats.get("handshakeAgeSeconds")
+    if handshake_age is None:
+        handshake_text = "никогда"
+    elif handshake_age < 60:
+        handshake_text = f"{handshake_age} сек. назад"
+    else:
+        handshake_text = f"{handshake_age // 60} мин. назад"
 
     text = (
-        "📊 **Ваша статистика:**\n\n"
-        f"🔼 Загружено: `{upload} {upload_size}`\n"
-        f"🔽 Скачано: `{download} {download_size}`\n"
+        "📊 **Статус подключения:**
+
+"
+        f"{state_text}
+"
+        f"⬇️ Скорость сейчас: `{download_mbps:.2f} Мбит/с`
+"
+        f"⬆️ Скорость сейчас: `{upload_mbps:.2f} Мбит/с`
+"
+        f"🤝 Последнее подключение: `{handshake_text}`
+"
     )
-    
+
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ В меню", callback_data="back_to_menu")
-    
+
     await message.answer(text, parse_mode='Markdown', reply_markup=builder.as_markup())
 
 @router.message(Command("help"))
