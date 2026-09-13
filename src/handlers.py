@@ -17,10 +17,9 @@ from database import (
     User, Session, get_user_stats as db_user_stats, delete_user
 )
 from functions import (
-    create_vless_profile, delete_client_by_email, generate_vless_url, 
-    get_user_stats, create_static_client, get_global_stats, 
-    get_online_users, generate_sub_url, update_client_expiry, get_safe_expiry_timestamp,
-    force_update_profile_expiry
+    create_awg_profile, delete_client_by_id,
+    get_client_stats, create_static_client, get_global_stats,
+    get_online_users,
 )
 
 logger = logging.getLogger(__name__)
@@ -413,19 +412,6 @@ async def process_successful_payment(message: Message, bot: Bot):
                 # Получаем обновленные данные пользователя
                 updated_user = await get_user(message.from_user.id)
                 
-                # Если у пользователя есть профиль, обновляем expiry_time в 3x-ui
-                if updated_user and updated_user.vless_profile_data:
-                    try:
-                        profile_data = safe_json_loads(updated_user.vless_profile_data, default={})
-                        email = profile_data.get("email")
-                        if email:
-                            expiry_time = get_safe_expiry_timestamp(updated_user.subscription_end)
-                            logger.info(f"📅 Updating expiry time for user {message.from_user.id}: {expiry_time}")
-                            await update_client_expiry(email, expiry_time)
-                            logger.info(f"✅ Updated expiry time in 3x-ui for user {message.from_user.id}")
-                    except Exception as e:
-                        logger.error(f"🛑 Failed to update expiry time in 3x-ui: {e}")
-                
                 await message.answer(
                     f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
                     "Спасибо за покупку! 🎉"
@@ -525,18 +511,6 @@ async def admin_add_time_amount(message: Message, state: FSMContext):
                     user.subscription_end = datetime.utcnow() + timedelta(seconds=total_seconds)
                 session.commit()
                 
-                # Обновляем expiry_time в 3x-ui если у пользователя есть профиль
-                if user.vless_profile_data:
-                    try:
-                        profile_data = safe_json_loads(user.vless_profile_data, default={})
-                        email = profile_data.get("email")
-                        if email:
-                            expiry_time = get_safe_expiry_timestamp(user.subscription_end)
-                            logger.info(f"📅 Admin add time for user {user_id}: {expiry_time}")
-                            await update_client_expiry(email, expiry_time)
-                            logger.info(f"✅ Updated expiry time in 3x-ui for user {user_id} (admin add time)")
-                    except Exception as e:
-                        logger.error(f"🛑 Failed to update expiry time in 3x-ui for user {user_id}: {e}")
                 
                 await message.answer(f"✅ Добавлено время пользователю {user_id}")
             else:
@@ -591,18 +565,6 @@ async def admin_remove_time_amount(message: Message, state: FSMContext):
                 user.subscription_end = new_end
                 session.commit()
                 
-                # Обновляем expiry_time в 3x-ui если у пользователя есть профиль
-                if user.vless_profile_data:
-                    try:
-                        profile_data = safe_json_loads(user.vless_profile_data, default={})
-                        email = profile_data.get("email")
-                        if email:
-                            expiry_time = get_safe_expiry_timestamp(user.subscription_end)
-                            logger.info(f"📅 Admin remove time for user {user_id}: {expiry_time}")
-                            await update_client_expiry(email, expiry_time)
-                            logger.info(f"✅ Updated expiry time in 3x-ui for user {user_id} (admin remove time)")
-                    except Exception as e:
-                        logger.error(f"🛑 Failed to update expiry time in 3x-ui for user {user_id}: {e}")
                 
                 await message.answer(f"✅ Удалено время у пользователя {user_id}")
             else:
@@ -842,19 +804,15 @@ async def connect_profile(callback: CallbackQuery):
     if not user:
         await callback.answer("🛑 Ошибка профиля")
         return
-    
+
     if user.subscription_end < datetime.utcnow():
         await callback.answer("⚠️ Подписка истекла! Продлите подписку.")
         return
-    
+
     if not user.vless_profile_data:
         await callback.message.edit_text("⚙️ Создаем ваш VPN профиль...")
-        # Рассчитываем expiry_time в timestamp для 3x-ui
-        logger.info(f"📅 [connect_profile] User subscription_end: {user.subscription_end}")
-        expiry_time = get_safe_expiry_timestamp(user.subscription_end)
-        logger.info(f"📅 [connect_profile] Calculated expiry_time: {expiry_time}")
-        profile_data = await create_vless_profile(user.telegram_id, expiry_time)
-        
+        profile_data = await create_awg_profile(user.telegram_id)
+
         if profile_data:
             with Session() as session:
                 db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
@@ -865,62 +823,33 @@ async def connect_profile(callback: CallbackQuery):
         else:
             await callback.message.answer("🛑 Ошибка при создании профиля. Попробуйте позже.")
             return
-    
+
     profile_data = safe_json_loads(user.vless_profile_data, default={})
-    if not profile_data:
+    if not profile_data or not profile_data.get("config"):
         await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
         return
-    vless_url = generate_vless_url(profile_data)
-    sub_id = profile_data.get("sub_id")
-    sub_url = generate_sub_url(sub_id) if sub_id else vless_url
-    
-    # Генерация QR-кода локально
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(sub_url)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Сохранение в буфер
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='PNG')
-    img_byte_arr.seek(0)
-    photo = BufferedInputFile(img_byte_arr.getvalue(), filename="qr.png")
-    
+
+    config_file = BufferedInputFile(
+        profile_data["config"].encode("utf-8"),
+        filename="vpn.conf",
+    )
+
     text = (
-        "📲 Как подключить VPN\n"
-        "1. Нажмите кнопку «Подключиться» или отсканируйте QR код\n"
-        "Откроется страница с вашим VPN-профилем.\n\n"
-        "2.Пролистайте страницу вниз\n"
-        "Найдите кнопки с вашей операционной системой:\n"
-        "📱 Android\n"
-        "🍏 iPhone (iOS)\n\n"
-        "3. Выберите свою систему\n"
-        "Откроется список приложений.\n"
-        "👉 Выберите любое приложение из списка.\n\n"
-        "4.Установите приложение\n"
-        "Если оно не установлено — скачайте его.\n\n"
-        "5. Нажмите на выбранное приложение ещё раз\n\n"
-        "Ключ добавится автоматически — вручную ничего вставлять не нужно.\n\n"
-        "6. Подключитесь к VPN\n"
-        "Откроется приложение — нажмите:\n"
-        "👉 Подключиться / Connect\n\n"
-        "✅ Готово\n"
-        "VPN включён — интернет работает без ограничений 🚀\n\n"
-        "💡 Если не получилось\n"
-        "попробуйте другое приложение из списка\n"
-        "или заново нажмите «Подключиться» в боте"
+        "📲 Как подключить VPN\n\n"
+        "1. Установите приложение AmneziaWG (App Store / Google Play), если ещё не установлено\n"
+        "2. Откройте файл vpn.conf, приложенный выше — приложение AmneziaWG предложит импортировать его\n"
+        "3. Подтвердите импорт и включите тоннель внутри приложения\n\n"
+        "✅ Готово — VPN включён, интернет работает без ограничений 🚀"
     )
 
     builder = InlineKeyboardBuilder()
-    builder.button(text='Подключится', url=sub_url)
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
-    builder.adjust(1, 1)
+    builder.adjust(1)
 
-    await callback.message.answer_photo(
-        photo=photo,
+    await callback.message.answer_document(
+        document=config_file,
         caption=text,
         reply_markup=builder.as_markup(),
-        parse_mode='Markdown'
     )
     await callback.message.delete()
 
