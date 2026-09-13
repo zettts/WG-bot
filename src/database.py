@@ -164,18 +164,18 @@ async def delete_user(telegram_id: int) -> bool:
             # Сначала удаляем профиль из 3x-ui если он есть
             if user.awg_profile_data:
                 try:
-                    from functions import delete_client_by_email
+                    from functions import delete_client_by_id
                     import json
                     profile_data = json.loads(user.awg_profile_data)
-                    email = profile_data.get("email")
-                    if email:
-                        delete_result = await delete_client_by_email(email)
+                    client_id = profile_data.get("client_id")
+                    if client_id:
+                        delete_result = await delete_client_by_id(client_id)
                         if delete_result:
-                            logger.info(f"✅ Deleted profile from 3x-ui for user {telegram_id}")
+                            logger.info(f"✅ Deleted profile from panel for user {telegram_id}")
                         else:
-                            logger.warning(f"⚠️ Failed to delete profile from 3x-ui for user {telegram_id}")
+                            logger.warning(f"⚠️ Failed to delete profile from panel for user {telegram_id}")
                 except Exception as e:
-                    logger.error(f"🛑 Error deleting profile from 3x-ui: {e}")
+                    logger.error(f"🛑 Error deleting profile from panel: {e}")
             
             # Удаляем пользователя из базы данных
             session.delete(user)

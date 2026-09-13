@@ -457,12 +457,10 @@ async def admin_menu(callback: CallbackQuery):
     builder.button(text="- время", callback_data="admin_remove_time")
     builder.button(text="📋 Список пользователей", callback_data="admin_user_list")
     builder.button(text="🗑️ Удалить пользователя", callback_data="admin_delete_user")
-    builder.button(text="🔍 Проверить подписки", callback_data="admin_check_subscriptions")
     builder.button(text="📊 Статистика исп. сети", callback_data="admin_network_stats")
-    builder.button(text="🔧 Исправить профили", callback_data="admin_fix_profiles")
     builder.button(text="📢 Рассылка", callback_data="admin_send_message")
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
-    builder.adjust(2, 1, 1, 1, 1, 1, 1, 1)
+    builder.adjust(2, 1, 1, 1, 1, 1)
     
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode='Markdown')
 
@@ -900,129 +898,6 @@ async def network_stats(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад", callback_data="admin_menu")
     await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=builder.as_markup())
-
-@router.callback_query(F.data == "admin_fix_profiles")
-async def admin_fix_profiles(callback: CallbackQuery):
-    """Исправляет все профили с неправильными датами"""
-    await callback.answer("⏳ Исправляем профили...")
-    
-    try:
-        # Сначала исправляем даты в базе данных
-        from database import fix_all_subscription_dates, get_users_with_profiles
-        fixed_db_count = await fix_all_subscription_dates()
-        
-        # Получаем всех пользователей с профилями
-        users = await get_users_with_profiles()
-        
-        # Обновляем профили в 3x-ui
-        success_count = 0
-        fail_count = 0
-        
-        for user in users:
-            if user.awg_profile_data:
-                try:
-                    profile_data = safe_json_loads(user.awg_profile_data, default={})
-                    email = profile_data.get("email")
-                    if email:
-                        result = await force_update_profile_expiry(email, user.subscription_end)
-                        if result:
-                            success_count += 1
-                        else:
-                            fail_count += 1
-                except Exception as e:
-                    logger.error(f"🛑 Error fixing profile for user {user.telegram_id}: {e}")
-                    fail_count += 1
-        
-        text = (
-            f"🔧 **Исправление профилей завершено:**\n\n"
-            f"📊 Исправлено дат в БД: `{fixed_db_count}`\n"
-            f"✅ Обновлено профилей в 3x-ui: `{success_count}`\n"
-            f"❌ Ошибок обновления: `{fail_count}`\n\n"
-            f"📋 Всего проверено пользователей: `{len(users)}`"
-        )
-        
-        builder = InlineKeyboardBuilder()
-        builder.button(text="⬅️ Назад", callback_data="admin_menu")
-        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=builder.as_markup())
-        
-    except Exception as e:
-        logger.error(f"🛑 Error in admin_fix_profiles: {e}")
-        await callback.message.answer(f"❌ Ошибка при исправлении профилей: {str(e)}")
-
-@router.callback_query(F.data == "admin_check_subscriptions")
-async def admin_check_subscriptions(callback: CallbackQuery):
-    """Проверяет и исправляет расхождения между 3x-ui и базой данных"""
-    await callback.answer("⏳ Проверяем подписки...")
-    
-    try:
-        from functions import check_and_fix_subscriptions
-        
-        # Проверяем и исправляем подписки
-        stats = await check_and_fix_subscriptions()
-        
-        if "error" in stats:
-            text = (
-                f"❌ **Ошибка при проверке подписок:**\n\n"
-                f"📋 {stats['error']}"
-            )
-        else:
-            # Формируем детальный отчёт
-            text = (
-                f"🔍 **Проверка подписок завершена:**\n\n"
-                f"📊 **Статистика:**\n"
-                f"• Всего клиентов в 3x-ui: `{stats['total_3xui']}`\n"
-                f"• Всего пользователей в БД: `{stats['total_db']}`\n"
-                f"• Совпадают: `{stats['matched']}` ✅\n"
-                f"• Расхождения: `{stats['mismatch']}` ⚠️\n"
-                f"• Исправлено: `{stats['fixed']}` 🔧\n"
-                f"• Нет в БД: `{stats['not_in_db']}` ℹ️\n\n"
-            )
-            
-            # Добавляем детальную информацию о проблемах
-            problems = [d for d in stats['details'] if d['status'] in ['mismatch', 'fix_failed', 'fix_error']]
-            if problems:
-                text += f"⚠️ **Проблемы ({len(problems)}):**\n\n"
-                for i, problem in enumerate(problems[:10], 1):  # Показываем первые 10
-                    email = problem['email']
-                    status_emoji = {
-                        'mismatch': '⚠️',
-                        'fix_failed': '❌',
-                        'fix_error': '🛑'
-                    }.get(problem['status'], '❓')
-                    
-                    text += f"{i}. {status_emoji} `{email}`\n"
-                    
-                    if problem['status'] == 'mismatch':
-                        from datetime import datetime
-                        expiry_3xui = datetime.fromtimestamp(problem['expiry_3xui']).strftime('%d-%m-%Y %H:%M') if problem['expiry_3xui'] > 0 else 'Истёк'
-                        expiry_db = datetime.fromtimestamp(problem['expiry_db']).strftime('%d-%m-%Y %H:%M') if problem['expiry_db'] > 0 else 'Истёк'
-                        text += f"   3x-ui: {expiry_3xui}\n"
-                        text += f"   БД: {expiry_db}\n"
-                    elif problem['status'] == 'fix_error':
-                        text += f"   Ошибка: {problem.get('error', 'Неизвестно')}\n"
-                    
-                    text += "\n"
-                
-                if len(problems) > 10:
-                    text += f"... и ещё {len(problems) - 10} проблем\n\n"
-            
-            # Добавляем информацию об исправленных
-            fixed = [d for d in stats['details'] if d['status'] == 'fixed']
-            if fixed:
-                text += f"✅ **Исправлено ({len(fixed)}):**\n\n"
-                for i, fix in enumerate(fixed[:5], 1):  # Показываем первые 5
-                    text += f"{i}. `{fix['email']}`\n"
-                
-                if len(fixed) > 5:
-                    text += f"... и ещё {len(fixed) - 5}\n\n"
-        
-        builder = InlineKeyboardBuilder()
-        builder.button(text="⬅️ Назад", callback_data="admin_menu")
-        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=builder.as_markup())
-        
-    except Exception as e:
-        logger.error(f"🛑 Error in admin_check_subscriptions: {e}")
-        await callback.message.answer(f"❌ Ошибка при проверке подписок: {str(e)}")
 
 @router.callback_query(F.data == "admin_delete_user")
 async def admin_delete_user_start(callback: CallbackQuery, state: FSMContext):
