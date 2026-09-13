@@ -984,7 +984,7 @@ async def admin_confirm_delete_user(callback: CallbackQuery):
 @router.callback_query(F.data == "back_to_menu")
 async def back_to_menu(callback: CallbackQuery, bot: Bot):
     await callback.answer()
-    if callback.message.photo:
+    if callback.message.photo or callback.message.document:
         await callback.message.delete()
         await show_menu(bot, callback.from_user.id)
     else:
