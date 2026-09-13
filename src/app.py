@@ -8,7 +8,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import PreCheckoutQuery
 from handlers import setup_handlers
 from datetime import datetime, timedelta
-from functions import delete_client_by_email
+from functions import delete_client_by_id
 from database import Session, User, init_db, get_all_users, delete_user_profile
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -42,21 +42,20 @@ async def check_subscriptions(bot: Bot):
                         logger.warning(f"⚠️ Notification error: {e}")
                 
                 # Проверка истечения подписки
-                if user.subscription_end <= now and user.vless_profile_data:
+                if user.subscription_end <= now and user.awg_profile_data:
                     try:
-                        profile = json.loads(user.vless_profile_data)
-                        # Удаляем из инбаунда
-                        success = await delete_client_by_email(profile["email"])
+                        profile = json.loads(user.awg_profile_data)
+                        client_id = profile.get("client_id")
+                        success = await delete_client_by_id(client_id) if client_id else False
                         if success:
-                            # Удаляем профиль из БД
                             await delete_user_profile(user.telegram_id)
-                            
+
                             await bot.send_message(
                                 user.telegram_id,
                                 "❌ Ваша подписка истекла! Профиль VPN был удален. Продлите подписку, чтобы создать новый."
                             )
                         else:
-                            logger.warning(f"⚠️ Failed to delete client {profile['email']} from inbound")
+                            logger.warning(f"⚠️ Failed to delete client {client_id} from panel")
                     except Exception as e:
                         logger.warning(f"⚠️ Deletion error: {e}")
         except Exception as e:
