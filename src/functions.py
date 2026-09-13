@@ -128,3 +128,89 @@ async def delete_client_by_id(client_id: str) -> bool:
         return await api.delete_client(client_id)
     finally:
         await api.close()
+
+
+async def get_client_stats(client_id: str) -> dict:
+    """Статистика одного клиента: онлайн/офлайн, скорость, время последнего handshake."""
+    api = PanelAPI()
+    try:
+        await api._ensure_session()
+        async with api.session.get(f"{PANEL_BASE_URL}/api/v1/diagnostics") as resp:
+            if resp.status != 200:
+                return {"state": "unknown"}
+            data = await resp.json()
+            for entry in data:
+                if entry.get("id") == client_id:
+                    return entry
+            return {"state": "not_found"}
+    except Exception as e:
+        logger.exception(f"Get client stats error: {e}")
+        return {"state": "error"}
+    finally:
+        await api.close()
+
+
+async def get_online_users() -> int:
+    """Количество клиентов, у которых недавний handshake (см. state == 'online')."""
+    api = PanelAPI()
+    try:
+        await api._ensure_session()
+        async with api.session.get(f"{PANEL_BASE_URL}/api/v1/diagnostics") as resp:
+            if resp.status != 200:
+                return 0
+            data = await resp.json()
+            return sum(1 for entry in data if entry.get("state") == "online")
+    except Exception as e:
+        logger.exception(f"Get online users error: {e}")
+        return 0
+    finally:
+        await api.close()
+
+
+async def get_global_stats() -> dict:
+    """Суммарная скорость по всем клиентам сейчас (бит/с)."""
+    api = PanelAPI()
+    try:
+        await api._ensure_session()
+        async with api.session.get(f"{PANEL_BASE_URL}/api/v1/diagnostics") as resp:
+            if resp.status != 200:
+                return {"download": 0, "upload": 0}
+            data = await resp.json()
+            download = sum(e.get("downloadBps") or 0 for e in data)
+            upload = sum(e.get("uploadBps") or 0 for e in data)
+            return {"download": download, "upload": upload}
+    except Exception as e:
+        logger.exception(f"Get global stats error: {e}")
+        return {"download": 0, "upload": 0}
+    finally:
+        await api.close()
+
+
+async def create_static_client(profile_name: str):
+    """Создаёт клиента с произвольным именем (для админских/статических профилей)."""
+    api = PanelAPI()
+    try:
+        await api._ensure_session()
+        async with api.session.post(
+            f"{PANEL_BASE_URL}/api/v1/clients",
+            json={"name": profile_name, "networkGroup": "guest"},
+        ) as resp:
+            if resp.status == 201:
+                data = await resp.json()
+                client_id = data["client"]["id"]
+            elif resp.status == 409:
+                client_id = await api.find_client_id_by_name(profile_name)
+                if not client_id:
+                    return None
+            else:
+                logger.error(f"Create static client failed: {resp.status}")
+                return None
+        config = await api.export_client_config(client_id)
+        if not config:
+            return None
+        return {"client_id": client_id, "config": config}
+    except Exception as e:
+        logger.exception(f"Create static client error: {e}")
+        return None
+    finally:
+        await api.close()
