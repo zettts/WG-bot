@@ -19,7 +19,7 @@ from database import (
 from functions import (
     create_awg_profile, delete_client_by_id, delete_client_by_name,
     get_client_stats, create_static_client, get_global_stats,
-    get_online_users,
+    get_online_users, set_client_enabled,
 )
 
 logger = logging.getLogger(__name__)
@@ -411,7 +411,17 @@ async def process_successful_payment(message: Message, bot: Bot):
             if success:
                 # Получаем обновленные данные пользователя
                 updated_user = await get_user(message.from_user.id)
-                
+
+                # Если у пользователя уже был профиль (например, отключённый после истечения) — включаем его обратно
+                if updated_user and updated_user.awg_profile_data:
+                    try:
+                        profile_data = safe_json_loads(updated_user.awg_profile_data, default={})
+                        client_id = profile_data.get("client_id")
+                        if client_id:
+                            await set_client_enabled(client_id, True)
+                    except Exception as e:
+                        logger.error(f"🛑 Error re-enabling client after payment: {e}")
+
                 await message.answer(
                     f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
                     "Спасибо за покупку! 🎉"

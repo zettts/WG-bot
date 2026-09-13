@@ -226,3 +226,24 @@ async def delete_client_by_name(name: str) -> bool:
         return await api.delete_client(client_id)
     finally:
         await api.close()
+
+
+async def set_client_enabled(client_id: str, enabled: bool) -> bool:
+    """Включает/отключает клиента в панели, не трогая его ключи/конфиг."""
+    api = PanelAPI()
+    try:
+        await api._ensure_session()
+        async with api.session.patch(
+            f"{PANEL_BASE_URL}/api/v1/clients/{client_id}",
+            json={"enabled": enabled},
+        ) as resp:
+            if resp.status == 200:
+                logger.info(f"Client {client_id} enabled={enabled}")
+                return True
+            logger.error(f"Set client enabled failed: {resp.status}")
+            return False
+    except Exception as e:
+        logger.exception(f"Set client enabled error: {e}")
+        return False
+    finally:
+        await api.close()

@@ -8,8 +8,8 @@ from aiogram import Bot, Dispatcher
 from aiogram.types import PreCheckoutQuery
 from handlers import setup_handlers
 from datetime import datetime, timedelta
-from functions import delete_client_by_id
-from database import Session, User, init_db, get_all_users, delete_user_profile
+from functions import set_client_enabled
+from database import Session, User, init_db, get_all_users
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -42,22 +42,26 @@ async def check_subscriptions(bot: Bot):
                         logger.warning(f"⚠️ Notification error: {e}")
                 
                 # Проверка истечения подписки
-                if user.subscription_end <= now and user.awg_profile_data:
+                if user.subscription_end <= now and user.awg_profile_data and not user.notified:
                     try:
                         profile = json.loads(user.awg_profile_data)
                         client_id = profile.get("client_id")
-                        success = await delete_client_by_id(client_id) if client_id else False
+                        success = await set_client_enabled(client_id, False) if client_id else False
                         if success:
-                            await delete_user_profile(user.telegram_id)
+                            with Session() as session:
+                                db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
+                                if db_user:
+                                    db_user.notified = True
+                                    session.commit()
 
                             await bot.send_message(
                                 user.telegram_id,
-                                "❌ Ваша подписка истекла! Профиль VPN был удален. Продлите подписку, чтобы создать новый."
+                                "❌ Ваша подписка истекла! Доступ к VPN приостановлен. Продлите подписку — конфиг останется тем же, ничего переустанавливать не нужно."
                             )
                         else:
-                            logger.warning(f"⚠️ Failed to delete client {client_id} from panel")
+                            logger.warning(f"⚠️ Failed to disable client {client_id} in panel")
                     except Exception as e:
-                        logger.warning(f"⚠️ Deletion error: {e}")
+                        logger.warning(f"⚠️ Disable error: {e}")
         except Exception as e:
             logger.warning(f"⚠️ Subscription check error: {e}")
         
