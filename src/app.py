@@ -10,7 +10,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from handlers import setup_handlers
 from datetime import datetime, timedelta
 from functions import set_client_enabled
-from database import Session, User, init_db, get_all_users
+from database import Session, User, init_db, get_all_users, init_default_pricing
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -124,6 +124,7 @@ async def main():
 
         # Обновляем статус администраторов
         await update_admins_status()
+        await init_default_pricing()
     except Exception as e:
         logger.error(f"❌ Database initialization error: {e}")
         return
