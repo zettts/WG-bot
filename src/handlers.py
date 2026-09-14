@@ -41,6 +41,7 @@ class AdminStates(StatesGroup):
     REMOVE_TIME_AMOUNT = State()
     SEND_MESSAGE_TARGET = State()
     DELETE_USER = State()
+    EDIT_PRICING = State()
 
 def split_text(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list:
     """Разбивает текст на части указанной максимальной длины"""
@@ -477,9 +478,10 @@ async def admin_menu(callback: CallbackQuery):
     builder.button(text="🗑️ Удалить пользователя", callback_data="admin_delete_user")
     builder.button(text="📊 Статистика исп. сети", callback_data="admin_network_stats")
     builder.button(text="🖥️ Мониторинг серверов", callback_data="admin_server_monitoring")
+    builder.button(text="💰 Тарифы", callback_data="admin_pricing")
     builder.button(text="📢 Рассылка", callback_data="admin_send_message")
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
-    builder.adjust(2, 1, 1, 1, 1, 1, 1)
+    builder.adjust(2, 1, 1, 1, 1, 1, 1, 1)
     
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode='Markdown')
 
@@ -1050,3 +1052,59 @@ async def admin_server_monitoring(callback: CallbackQuery):
     builder.adjust(1, 1)
 
     await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data == "admin_pricing")
+async def admin_pricing(callback: CallbackQuery):
+    """Показывает текущие тарифы с кнопками изменения"""
+    pricing = await get_pricing()
+
+    builder = InlineKeyboardBuilder()
+    text = "💰 **Текущие тарифы**\n\n"
+
+    for months in sorted(pricing.keys()):
+        price_info = pricing[months]
+        final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
+        discount_text = f" (-{price_info['discount_percent']}%)" if price_info["discount_percent"] > 0 else ""
+        text += f"{months} мес. — ⭐ {final_price}{discount_text} (база: {price_info['base_price']})\n"
+        builder.button(text=f"✏️ {months} мес.", callback_data=f"edit_price_{months}")
+
+    builder.button(text="⬅️ Назад", callback_data="admin_menu")
+    builder.adjust(2, 2, 1)
+
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("edit_price_"))
+async def edit_price_start(callback: CallbackQuery, state: FSMContext):
+    """Начало изменения цены конкретного тарифа"""
+    months = int(callback.data.split("_")[-1])
+    await state.update_data(edit_months=months)
+    await state.set_state(AdminStates.EDIT_PRICING)
+    await callback.answer()
+    await callback.message.answer(
+        f"Введите новую базовую цену (в ⭐) для тарифа {months} мес.:"
+    )
+
+
+@router.message(AdminStates.EDIT_PRICING)
+async def edit_price_process(message: Message, state: FSMContext):
+    """Обработка введённой новой цены"""
+    data = await state.get_data()
+    months = data.get("edit_months")
+
+    try:
+        new_price = int(message.text)
+        if new_price <= 0:
+            raise ValueError
+    except (ValueError, TypeError):
+        await message.answer("⚠️ Введите положительное целое число.")
+        return
+
+    success = await update_pricing_tier(months, new_price)
+    await state.clear()
+
+    if success:
+        await message.answer(f"✅ Цена для тарифа {months} мес. обновлена: ⭐ {new_price}")
+    else:
+        await message.answer("🛑 Не удалось обновить цену — тариф не найден.")
