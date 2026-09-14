@@ -26,6 +26,12 @@ class StaticProfile(Base):
     awg_config = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class PricingTier(Base):
+    __tablename__ = 'pricing_tiers'
+    months = Column(Integer, primary_key=True)
+    base_price = Column(Integer)
+    discount_percent = Column(Integer, default=0)
+
 engine = create_engine('sqlite:///users.db', echo=False)
 Session = sessionmaker(bind=engine)
 
@@ -217,3 +223,42 @@ def validate_and_fix_subscription_date(subscription_end: datetime) -> datetime:
         return now + timedelta(days=3)  # Даем 3 дня тестового периода
     
     return subscription_end
+DEFAULT_PRICING = {
+    1: {"base_price": 250, "discount_percent": 0},
+    3: {"base_price": 750, "discount_percent": 10},
+    6: {"base_price": 1500, "discount_percent": 20},
+    12: {"base_price": 3000, "discount_percent": 30},
+}
+
+async def init_default_pricing():
+    with Session() as session:
+        existing = session.query(PricingTier).count()
+        if existing == 0:
+            for months, info in DEFAULT_PRICING.items():
+                session.add(PricingTier(
+                    months=months,
+                    base_price=info["base_price"],
+                    discount_percent=info["discount_percent"],
+                ))
+            session.commit()
+            logger.info("✅ Initialized default pricing tiers")
+
+async def get_pricing() -> dict:
+    with Session() as session:
+        tiers = session.query(PricingTier).order_by(PricingTier.months).all()
+        return {
+            t.months: {"base_price": t.base_price, "discount_percent": t.discount_percent}
+            for t in tiers
+        }
+
+async def update_pricing_tier(months: int, base_price: int) -> bool:
+    with Session() as session:
+        tier = session.query(PricingTier).filter_by(months=months).first()
+        if tier:
+            tier.base_price = base_price
+            session.commit()
+            return True
+        return False
+
+def calculate_final_price(base_price: int, discount_percent: int) -> int:
+    return base_price - (base_price * discount_percent // 100)
