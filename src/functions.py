@@ -67,7 +67,7 @@ class PanelAPI:
                 if resp.status != 200:
                     return None
                 data = await resp.json()
-                for client in data.get("clients", []):
+                for client in data:
                     if client.get("name") == name:
                         return client.get("id")
                 return None
