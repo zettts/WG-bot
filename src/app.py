@@ -30,7 +30,7 @@ async def check_subscriptions(bot: Bot):
                 if user.subscription_end - now < timedelta(days=1) and user.subscription_end >= now and not user.notified:
                     try:
                         builder = InlineKeyboardBuilder()
-                        builder.button(text="🔄 Продлить подписку", callback_data="renew_now")
+                        builder.button(text="🔄 Продлить подписку", callback_data="renew_sub")
                         await bot.send_message(
                             user.telegram_id,
                             "⚠️ Ваша подписка истекает через 24 часа! Продлите подписку, чтобы сохранить доступ.",
