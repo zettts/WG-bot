@@ -361,11 +361,13 @@ async def process_payment(callback: CallbackQuery, bot: Bot):
     
     try:
         months = int(callback.data.split("_")[1])
-        if months not in config.PRICES:
+        pricing = await get_pricing()
+        if months not in pricing:
             await callback.message.answer("❌ Неверный период подписки")
             return
-            
-        final_price = config.calculate_price(months)
+
+        price_info = pricing[months]
+        final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
         suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
         # Создаем инвойс для оплаты
         prices = [LabeledPrice(label=f"VPN подписка на {months} мес.", amount=final_price)]
@@ -397,7 +399,9 @@ async def process_successful_payment(message: Message, bot: Bot):
         payload = message.successful_payment.invoice_payload
         if payload.startswith("subscription_"):
             months = int(payload.split("_")[1])
-            final_price = config.calculate_price(months)  # Пересчитываем стоимость в звёздах
+            pricing = await get_pricing()
+            price_info = pricing.get(months, {"base_price": 0, "discount_percent": 0})
+            final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])  # Пересчитываем стоимость в звёздах
             
             # Получаем информацию о пользователе
             user = await get_user(message.from_user.id)
