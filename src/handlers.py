@@ -1,3 +1,4 @@
+import html
 import asyncio
 import logging
 import json
@@ -251,6 +252,11 @@ async def connect_cmd(message: Message, bot: Bot):
         document=config_file,
         caption=text,
         reply_markup=builder.as_markup(),
+    )
+
+    await message.answer(
+        f"<pre>{html.escape(profile_data['config'])}</pre>",
+        parse_mode="HTML",
     )
 
 @router.message(Command("stats"))
@@ -746,6 +752,10 @@ async def process_static_profile_name(message: Message, state: FSMContext):
             caption=f"Профиль создан: {profile_name}",
             reply_markup=builder.as_markup(),
         )
+        await message.answer(
+            f"<pre>{html.escape(profile_data['config'])}</pre>",
+            parse_mode="HTML",
+        )
     else:
         await message.answer("Ошибка при создании профиля")
 
@@ -857,6 +867,10 @@ async def connect_profile(callback: CallbackQuery):
         document=config_file,
         caption=text,
         reply_markup=builder.as_markup(),
+    )
+    await callback.message.answer(
+        f"<pre>{html.escape(profile_data['config'])}</pre>",
+        parse_mode="HTML",
     )
     await callback.message.delete()
 
