@@ -16,6 +16,7 @@ from database import (
     get_all_users, create_static_profile, get_static_profiles, 
     User, Session, get_user_stats as db_user_stats, delete_user
 )
+from monitoring import get_oracle_stats, get_ihor_stats
 from functions import (
     create_awg_profile, delete_client_by_id, delete_client_by_name,
     get_client_stats, create_static_client, get_global_stats,
@@ -468,9 +469,10 @@ async def admin_menu(callback: CallbackQuery):
     builder.button(text="📋 Список пользователей", callback_data="admin_user_list")
     builder.button(text="🗑️ Удалить пользователя", callback_data="admin_delete_user")
     builder.button(text="📊 Статистика исп. сети", callback_data="admin_network_stats")
+    builder.button(text="🖥️ Мониторинг серверов", callback_data="admin_server_monitoring")
     builder.button(text="📢 Рассылка", callback_data="admin_send_message")
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
-    builder.adjust(2, 1, 1, 1, 1, 1)
+    builder.adjust(2, 1, 1, 1, 1, 1, 1)
     
     await callback.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode='Markdown')
 
@@ -1011,3 +1013,33 @@ def safe_json_loads(data, default=None):
         return json.loads(data)
     except Exception:
         return default
+
+
+@router.callback_query(F.data == "admin_server_monitoring")
+async def admin_server_monitoring(callback: CallbackQuery):
+    """Мониторинг обоих серверов: CPU, RAM, Swap, диск"""
+    await callback.answer("⏳ Собираем данные с обоих серверов...")
+
+    nl_stats = await get_oracle_stats()
+    ru_stats = await get_ihor_stats()
+
+    text = (
+        "🖥️ **Мониторинг серверов**\n\n"
+        "🇳🇱 **NL**\n"
+        f"CPU: `{nl_stats['cpu']}`\n"
+        f"RAM: `{nl_stats['ram']}`\n"
+        f"Swap: `{nl_stats['swap']}`\n"
+        f"Диск: `{nl_stats['disk']}`\n\n"
+        "🇷🇺 **RU**\n"
+        f"CPU: `{ru_stats['cpu']}`\n"
+        f"RAM: `{ru_stats['ram']}`\n"
+        f"Swap: `{ru_stats['swap']}`\n"
+        f"Диск: `{ru_stats['disk']}`\n"
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Обновить", callback_data="admin_server_monitoring")
+    builder.button(text="⬅️ Назад", callback_data="admin_menu")
+    builder.adjust(1, 1)
+
+    await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=builder.as_markup())
