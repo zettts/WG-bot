@@ -90,6 +90,21 @@ class PanelAPI:
             logger.exception(f"Export client error: {e}")
             return None
 
+    async def export_client_vpn_link(self, client_id: str):
+        await self._ensure_session()
+        try:
+            async with self.session.get(
+                f"{PANEL_BASE_URL}/api/v1/clients/{client_id}/export",
+                params={"format": "vpn-link"},
+            ) as resp:
+                if resp.status != 200:
+                    logger.error(f"Export vpn-link failed: {resp.status}")
+                    return None
+                return await resp.text()
+        except Exception as e:
+            logger.exception(f"Export vpn-link error: {e}")
+            return None
+
     async def delete_client(self, client_id: str) -> bool:
         await self._ensure_session()
         try:
@@ -117,7 +132,8 @@ async def create_awg_profile(telegram_id: int):
         config = await api.export_client_config(client_id)
         if not config:
             return None
-        return {"client_id": client_id, "config": config}
+        vpn_link = await api.export_client_vpn_link(client_id)
+        return {"client_id": client_id, "config": config, "vpn_link": vpn_link}
     finally:
         await api.close()
 
@@ -208,7 +224,8 @@ async def create_static_client(profile_name: str):
         config = await api.export_client_config(client_id)
         if not config:
             return None
-        return {"client_id": client_id, "config": config}
+        vpn_link = await api.export_client_vpn_link(client_id)
+        return {"client_id": client_id, "config": config, "vpn_link": vpn_link}
     except Exception as e:
         logger.exception(f"Create static client error: {e}")
         return None

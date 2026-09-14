@@ -255,7 +255,7 @@ async def connect_cmd(message: Message, bot: Bot):
     )
 
     await message.answer(
-        f"<pre>{html.escape(profile_data['config'])}</pre>",
+        f"<pre>{html.escape(profile_data['vpn_link'])}</pre>",
         parse_mode="HTML",
     )
 
@@ -753,7 +753,7 @@ async def process_static_profile_name(message: Message, state: FSMContext):
             reply_markup=builder.as_markup(),
         )
         await message.answer(
-            f"<pre>{html.escape(profile_data['config'])}</pre>",
+            f"<pre>{html.escape(profile_data['vpn_link'])}</pre>",
             parse_mode="HTML",
         )
     else:
@@ -869,7 +869,7 @@ async def connect_profile(callback: CallbackQuery):
         reply_markup=builder.as_markup(),
     )
     await callback.message.answer(
-        f"<pre>{html.escape(profile_data['config'])}</pre>",
+        f"<pre>{html.escape(profile_data['vpn_link'])}</pre>",
         parse_mode="HTML",
     )
     await callback.message.delete()
