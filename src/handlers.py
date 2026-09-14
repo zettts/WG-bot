@@ -14,7 +14,8 @@ from config import config
 from database import (
     StaticProfile, get_user, create_user, update_subscription, 
     get_all_users, create_static_profile, get_static_profiles, 
-    User, Session, get_user_stats as db_user_stats, delete_user
+    User, Session, get_user_stats as db_user_stats, delete_user,
+    get_pricing, update_pricing_tier, calculate_final_price
 )
 from monitoring import get_oracle_stats, get_ihor_stats
 from functions import (
@@ -173,22 +174,23 @@ async def renew_cmd(message: Message, bot: Bot):
     
     # Создаем клавиатуру с вариантами подписки
     builder = InlineKeyboardBuilder()
-    
+    pricing = await get_pricing()
+
     # Добавляем кнопки для каждого варианта подписки
-    for months in sorted(config.PRICES.keys()):
-        price_info = config.PRICES[months]
-        final_price = config.calculate_price(months)
-        
+    for months in sorted(pricing.keys()):
+        price_info = pricing[months]
+        final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
+
         discount_text = ""
         if price_info["discount_percent"] > 0:
             discount_text = f" (-{price_info['discount_percent']}%)"
-            
+
         button_text = f"{months} мес. - ⭐ {final_price}{discount_text}"
         builder.button(text=button_text, callback_data=f"pay_{months}")
-    
+
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
-    
+
     await message.answer(
         "⭐ **Выберите период подписки:**",
         reply_markup=builder.as_markup(),
@@ -330,22 +332,23 @@ async def help_msg(callback: CallbackQuery):
 @router.callback_query(F.data == "renew_sub")
 async def renew_subscription(callback: CallbackQuery):
     builder = InlineKeyboardBuilder()
-    
+    pricing = await get_pricing()
+
     # Добавляем кнопки для каждого варианта подписки
-    for months in sorted(config.PRICES.keys()):
-        price_info = config.PRICES[months]
-        final_price = config.calculate_price(months)
-        
+    for months in sorted(pricing.keys()):
+        price_info = pricing[months]
+        final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
+
         discount_text = ""
         if price_info["discount_percent"] > 0:
             discount_text = f" (-{price_info['discount_percent']}%)"
-            
+
         button_text = f"{months} мес. - ⭐ {final_price}{discount_text}"
         builder.button(text=button_text, callback_data=f"pay_{months}")
-    
+
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
-    
+
     await callback.message.edit_text(
         "⭐ **Выберите период подписки:**",
         reply_markup=builder.as_markup(),
