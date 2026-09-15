@@ -1273,3 +1273,118 @@ async def platform_qr(callback: CallbackQuery):
     except Exception as e:
         logger.error(f"🛑 QR generation failed: {e}")
         await callback.message.answer("⚠️ Не удалось сформировать QR-код.")
+
+
+async def send_platform_instructions(message: Message, user, platform: str):
+    """Отправляет инструкцию, приложение и ключ/файл для выбранной платформы."""
+    profile_data = safe_json_loads(user.awg_profile_data, default={}) if user.awg_profile_data else {}
+    config_text = profile_data.get("config")
+    vpn_link = profile_data.get("vpn_link")
+
+    if not config_text:
+        profile_data = await create_awg_profile(user.telegram_id)
+        if not profile_data:
+            await message.answer("\U0001f6d1 Ошибка при создании профиля. Попробуйте позже.")
+            return
+        with Session() as session:
+            db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
+            if db_user:
+                db_user.awg_profile_data = json.dumps(profile_data)
+                session.commit()
+        config_text = profile_data.get("config")
+        vpn_link = profile_data.get("vpn_link")
+
+    label, url = APP_LINKS[platform]
+    builder = InlineKeyboardBuilder()
+    builder.button(text=label, url=url)
+    if platform in ("ios", "android"):
+        builder.button(text="\U0001f4f7 Показать QR-код", callback_data=f"qr_{platform}")
+    builder.button(text="\u2b05\ufe0f В меню", callback_data="back_to_menu")
+    builder.adjust(1)
+
+    await message.answer(
+        PLATFORM_TEXTS[platform],
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
+    if platform == "ios":
+        if vpn_link:
+            await message.answer(quoted_key(vpn_link), parse_mode="HTML")
+    else:
+        config_file = BufferedInputFile(config_text.encode("utf-8"), filename="vpn.conf")
+        await message.answer_document(document=config_file)
+        if platform == "linux" and vpn_link:
+            await message.answer(quoted_key(vpn_link), parse_mode="HTML")
+
+
+@router.message(F.web_app_data)
+async def handle_webapp_data(message: Message, bot: Bot):
+    """Данные из Mini App: {"action":"connect","months":N,"platform":"ios"}"""
+    try:
+        data = json.loads(message.web_app_data.data)
+    except Exception as e:
+        logger.error(f"\U0001f6d1 Bad web_app_data: {e}")
+        return
+
+    if data.get("action") != "connect":
+        return
+
+    months = data.get("months")
+    platform = data.get("platform")
+
+    # Пользователь мог прийти по прямой ссылке и не иметь записи в базе
+    user = await get_user(message.from_user.id)
+    if not user:
+        is_admin = message.from_user.id in config.ADMINS
+        user = await create_user(
+            telegram_id=message.from_user.id,
+            full_name=message.from_user.full_name,
+            username=message.from_user.username,
+            is_admin=is_admin,
+        )
+        await message.answer(
+            "\U0001f44b Добро пожаловать в TopVPN!\n"
+            "Вам предоставлен бесплатный тестовый период на 3 дня."
+        )
+
+    # Подписка активна — сразу выдаём инструкцию под выбранную платформу
+    if user.subscription_end > datetime.utcnow():
+        if platform in PLATFORM_TEXTS:
+            await send_platform_instructions(message, user, platform)
+        else:
+            await show_menu(bot, message.from_user.id)
+        return
+
+    # Подписки нет — выставляем счёт на выбранный тариф
+    pricing = await get_pricing()
+    if months not in pricing:
+        await show_menu(bot, message.from_user.id)
+        return
+
+    price_info = pricing[months]
+    final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
+    suffix = "месяц" if months == 1 else "месяца" if months in (2, 3, 4) else "месяцев"
+
+    order_id = f"sub_{message.from_user.id}_{months}_{int(datetime.utcnow().timestamp())}"
+    payment_id, pay_url = await create_payment(
+        amount_rub=f"{final_price}.00",
+        order_id=order_id,
+        description=f"VPN подписка на {months} {suffix}",
+        test=config.ROLLYPAY_TEST_MODE,
+    )
+
+    if not payment_id:
+        await message.answer("\u274c Оплата временно недоступна, попробуйте позже")
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="\U0001f4b3 Оплатить", url=pay_url)
+    await message.answer(
+        f"Счёт на {final_price}\u20bd за {months} {suffix}.\nНажмите кнопку ниже, чтобы оплатить:",
+        reply_markup=builder.as_markup(),
+    )
+
+    asyncio.create_task(
+        _wait_and_finalize_payment(bot, message.from_user.id, payment_id, months, final_price)
+    )
