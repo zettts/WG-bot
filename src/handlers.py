@@ -1,4 +1,5 @@
 import html
+import re
 import asyncio
 import logging
 import json
@@ -1150,3 +1151,19 @@ async def support_message(message: Message, state: FSMContext, bot: Bot):
             logger.error(f"🛑 Failed to forward support message to admin {admin_id}: {e}")
 
     await message.answer("✅ Сообщение отправлено в поддержку, вам ответят в этом чате.")
+
+
+@router.message(F.reply_to_message, F.text)
+async def admin_reply_to_support(message: Message, bot: Bot):
+    if message.from_user.id not in config.ADMINS:
+        return
+    match = re.search(r"Вопрос в поддержку от .+ \(`(\d+)`\)", message.reply_to_message.text or "")
+    if not match:
+        return
+    target_id = int(match.group(1))
+    try:
+        await bot.send_message(target_id, f"💬 Ответ от поддержки:\n\n{message.text}")
+        await message.answer("✅ Ответ отправлен пользователю.")
+    except Exception as e:
+        logger.error(f"🛑 Failed to send admin reply to user {target_id}: {e}")
+        await message.answer("❌ Не удалось отправить ответ пользователю.")
