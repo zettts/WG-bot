@@ -12,6 +12,7 @@ class Config(BaseModel):
     ROLLYPAY_TERMINAL_ID: str = os.getenv("ROLLYPAY_TERMINAL_ID", "")
     ROLLYPAY_SIGNING_SECRET: str = os.getenv("ROLLYPAY_SIGNING_SECRET", "")
     ROLLYPAY_TEST_MODE: bool = os.getenv("ROLLYPAY_TEST_MODE", "false").lower() == "true"
+    PANEL_PASSWORD: str = os.getenv("PANEL_PASSWORD", "")
 
     # Настройки цен и скидок
     PRICES: Dict[int, Dict[str, int]] = {

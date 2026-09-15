@@ -1,10 +1,12 @@
 import aiohttp
 import logging
 
+from config import config
+
 logger = logging.getLogger(__name__)
 
 PANEL_BASE_URL = "http://localhost:51821"
-PANEL_PASSWORD = "XYYnSuxzctboFYUzikBCnP9w"
+PANEL_PASSWORD = config.PANEL_PASSWORD
 
 
 class PanelAPI:
