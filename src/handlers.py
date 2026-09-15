@@ -1000,7 +1000,7 @@ async def admin_confirm_delete_user(callback: CallbackQuery):
             text = (
                 f"✅ **Пользователь удалён**\n\n"
                 f"🆔 Telegram ID: `{telegram_id}`\n\n"
-                f"Профиль в 3x-ui также был удалён (если существовал)."
+                f"Профиль в AWG-Easy также был удалён (если существовал)."
             )
         else:
             text = (

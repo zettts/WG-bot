@@ -10,7 +10,7 @@ PANEL_PASSWORD = config.PANEL_PASSWORD
 
 
 class PanelAPI:
-    """Клиент для нового API awg-easy-3 (вместо старого 3x-ui)."""
+    """Клиент для API AWG-Easy 3."""
 
     def __init__(self):
         self.session = None

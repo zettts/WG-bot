@@ -167,7 +167,7 @@ async def delete_user(telegram_id: int) -> bool:
     with Session() as session:
         user = session.query(User).filter_by(telegram_id=telegram_id).first()
         if user:
-            # Сначала удаляем профиль из 3x-ui если он есть
+            # Сначала удаляем профиль из AWG-Easy если он есть
             if user.awg_profile_data:
                 try:
                     from functions import delete_client_by_id
