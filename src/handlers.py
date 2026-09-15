@@ -1144,8 +1144,7 @@ async def support_message(message: Message, state: FSMContext, bot: Bot):
         try:
             await bot.send_message(
                 admin_id,
-                f"🆘 Вопрос в поддержку от {user_label} (`{message.from_user.id}`):\n\n{message.text}",
-                parse_mode="Markdown"
+                f"🆘 Вопрос в поддержку от {user_label} ({message.from_user.id}):\n\n{message.text}",
             )
         except Exception as e:
             logger.error(f"🛑 Failed to forward support message to admin {admin_id}: {e}")
