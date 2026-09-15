@@ -383,6 +383,7 @@ async def process_payment(callback: CallbackQuery, bot: Bot):
             amount_rub=f"{final_price}.00",
             order_id=order_id,
             description=f"VPN подписка на {months} {suffix}",
+            test=config.ROLLYPAY_TEST_MODE,
         )
 
         if not payment_id:
