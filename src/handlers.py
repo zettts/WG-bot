@@ -6,7 +6,7 @@ import io
 import qrcode
 from datetime import datetime, timedelta
 from aiogram import Dispatcher, Router, F, Bot
-from aiogram.types import Message, CallbackQuery, LabeledPrice, PreCheckoutQuery, BufferedInputFile
+from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -188,14 +188,14 @@ async def renew_cmd(message: Message, bot: Bot):
         if price_info["discount_percent"] > 0:
             discount_text = f" (-{price_info['discount_percent']}%)"
 
-        button_text = f"{months} мес. - ⭐ {final_price}{discount_text}"
+        button_text = f"{months} мес. - {final_price}₽{discount_text}"
         builder.button(text=button_text, callback_data=f"pay_{months}")
 
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
 
     await message.answer(
-        "⭐ **Выберите период подписки:**",
+        "💳 **Выберите период подписки:**",
         reply_markup=builder.as_markup(),
         parse_mode='Markdown'
     )
@@ -351,14 +351,14 @@ async def renew_subscription(callback: CallbackQuery):
         if price_info["discount_percent"] > 0:
             discount_text = f" (-{price_info['discount_percent']}%)"
 
-        button_text = f"{months} мес. - ⭐ {final_price}{discount_text}"
+        button_text = f"{months} мес. - {final_price}₽{discount_text}"
         builder.button(text=button_text, callback_data=f"pay_{months}")
 
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
     builder.adjust(1)
 
     await callback.message.edit_text(
-        "⭐ **Выберите период подписки:**",
+        "💳 **Выберите период подписки:**",
         reply_markup=builder.as_markup(),
         parse_mode='Markdown'
     )
@@ -452,71 +452,6 @@ async def _wait_and_finalize_payment(bot: Bot, telegram_id: int, payment_id: str
                     pass
     except Exception as e:
         logger.error(f"🛑 Error finalizing RollyPay payment: {e}")
-
-@router.pre_checkout_query()
-async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery, bot: Bot):
-    await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
-@router.message(F.successful_payment)
-async def process_successful_payment(message: Message, bot: Bot):
-    try:
-        # Извлекаем информацию из payload
-        payload = message.successful_payment.invoice_payload
-        if payload.startswith("subscription_"):
-            months = int(payload.split("_")[1])
-            pricing = await get_pricing()
-            price_info = pricing.get(months, {"base_price": 0, "discount_percent": 0})
-            final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])  # Пересчитываем стоимость в звёздах
-            
-            # Получаем информацию о пользователе
-            user = await get_user(message.from_user.id)
-            if not user:
-                await message.answer("❌ Ошибка: пользователь не найден")
-                return
-            
-            # Определяем тип действия (покупка или продление)
-            now = datetime.utcnow()
-            action_type = "продлена" if user.subscription_end > now else "куплена"
-            
-            # Обновляем подписку
-            success = await update_subscription(message.from_user.id, months)
-            suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
-            if success:
-                # Получаем обновленные данные пользователя
-                updated_user = await get_user(message.from_user.id)
-
-                # Если у пользователя уже был профиль (например, отключённый после истечения) — включаем его обратно
-                if updated_user and updated_user.awg_profile_data:
-                    try:
-                        profile_data = safe_json_loads(updated_user.awg_profile_data, default={})
-                        client_id = profile_data.get("client_id")
-                        if client_id:
-                            await set_client_enabled(client_id, True)
-                    except Exception as e:
-                        logger.error(f"🛑 Error re-enabling client after payment: {e}")
-
-                await message.answer(
-                    f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
-                    "Спасибо за покупку! 🎉"
-                )
-                
-                # Отправляем уведомление администраторам
-                admin_message = (
-                    f"{action_type.capitalize()} подписка пользователем "
-                    f"`{user.full_name}` | `{user.telegram_id}` "
-                    f"на {months} {suffix} - ⭐ {final_price}"
-                )
-                
-                for admin_id in config.ADMINS:
-                    try:
-                        await bot.send_message(admin_id, admin_message, parse_mode='Markdown')
-                    except Exception as e:
-                        logger.error(f"🛑 Failed to send notification to admin {admin_id}: {e}")
-            else:
-                await message.answer("❌ Ошибка при обновлении подписки")
-    except Exception as e:
-        logger.error(f"🛑 Successful payment processing error: {e}")
-        await message.answer("❌ Ошибка при обработке платежа")
 
 @router.callback_query(F.data == "admin_menu")
 async def admin_menu(callback: CallbackQuery):
@@ -1138,7 +1073,7 @@ async def admin_pricing(callback: CallbackQuery):
         price_info = pricing[months]
         final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
         discount_text = f" (-{price_info['discount_percent']}%)" if price_info["discount_percent"] > 0 else ""
-        text += f"{months} мес. — ⭐ {final_price}{discount_text} (база: {price_info['base_price']})\n"
+        text += f"{months} мес. — {final_price}₽{discount_text} (база: {price_info['base_price']})\n"
         builder.button(text=f"✏️ {months} мес.", callback_data=f"edit_price_{months}")
 
     builder.button(text="⬅️ Назад", callback_data="admin_menu")
@@ -1155,7 +1090,7 @@ async def edit_price_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(AdminStates.EDIT_PRICING)
     await callback.answer()
     await callback.message.answer(
-        f"Введите новую базовую цену (в ⭐) для тарифа {months} мес.:"
+        f"Введите новую базовую цену (в ₽) для тарифа {months} мес.:"
     )
 
 
@@ -1177,6 +1112,6 @@ async def edit_price_process(message: Message, state: FSMContext):
     await state.clear()
 
     if success:
-        await message.answer(f"✅ Цена для тарифа {months} мес. обновлена: ⭐ {new_price}")
+        await message.answer(f"✅ Цена для тарифа {months} мес. обновлена: {new_price}₽")
     else:
         await message.answer("🛑 Не удалось обновить цену — тариф не найден.")

@@ -5,7 +5,6 @@ import warnings
 import coloredlogs
 from config import config
 from aiogram import Bot, Dispatcher
-from aiogram.types import PreCheckoutQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from handlers import setup_handlers
 from datetime import datetime, timedelta
@@ -141,11 +140,6 @@ async def main():
     except Exception as e:
         logger.error(f"❌ Handler registration error: {e}")
         return
-    
-    # Обработчик для предварительной проверки платежа
-    @dp.pre_checkout_query()
-    async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery):
-        await bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
     
     # Запускаем фоновую задачу проверки подписок
     try:
