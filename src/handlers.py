@@ -96,7 +96,7 @@ async def show_menu(bot: Bot, chat_id: int, message_id: int = None):
     builder.button(text="📄 Политика конфиденциальности", url="https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-08-12-99")
     builder.button(text="📋 Пользовательское соглашение", url="https://telegra.ph/PUBLICHNAYA-OFERTA-08-12-15")
 
-    builder.adjust(2, 2, 1, 1, 2)
+    builder.adjust(2, 2, 1, 1, 1, 1)
     
     if message_id:
         # Редактируем существующее сообщение
