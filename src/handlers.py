@@ -19,6 +19,7 @@ from database import (
     get_pricing, update_pricing_tier, calculate_final_price
 )
 from monitoring import get_oracle_stats, get_ihor_stats
+from rollypay_integration import create_payment, poll_payment_until_final
 from functions import (
     create_awg_profile, delete_client_by_id, delete_client_by_name,
     get_client_stats, create_static_client, get_global_stats,
@@ -365,7 +366,7 @@ async def renew_subscription(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("pay_"))
 async def process_payment(callback: CallbackQuery, bot: Bot):
     await callback.answer()
-    
+
     try:
         months = int(callback.data.split("_")[1])
         pricing = await get_pricing()
@@ -376,24 +377,80 @@ async def process_payment(callback: CallbackQuery, bot: Bot):
         price_info = pricing[months]
         final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
         suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
-        # Создаем инвойс для оплаты
-        prices = [LabeledPrice(label=f"VPN подписка на {months} мес.", amount=final_price)]
-        if config.PAYMENT_TOKEN:
-            await bot.send_invoice(
-                chat_id=callback.from_user.id,
-                title=f"VPN подписка на {months} месяцев",
-                description=f"Доступ к VPN сервису на {months} {suffix}",
-                payload=f"subscription_{months}",
-                provider_token="",
-                currency="XTR",
-                prices=prices,
-                start_parameter="create_subscription",
-            )
-        else:
-            await callback.message.answer("❌ Оплата временно недоступна")
+
+        order_id = f"sub_{callback.from_user.id}_{months}_{int(datetime.utcnow().timestamp())}"
+        payment_id, pay_url = await create_payment(
+            amount_rub=f"{final_price}.00",
+            order_id=order_id,
+            description=f"VPN подписка на {months} {suffix}",
+        )
+
+        if not payment_id:
+            await callback.message.answer("❌ Оплата временно недоступна, попробуйте позже")
+            return
+
+        builder = InlineKeyboardBuilder()
+        builder.button(text="💳 Оплатить", url=pay_url)
+        await callback.message.answer(
+            f"Счёт на {final_price}₽ создан.\nНажмите кнопку ниже, чтобы оплатить:",
+            reply_markup=builder.as_markup()
+        )
+
+        asyncio.create_task(
+            _wait_and_finalize_payment(bot, callback.from_user.id, payment_id, months, final_price)
+        )
     except Exception as e:
         logger.error(f"🛑 Payment error: {e}")
         await callback.message.answer("❌ Ошибка при создании счета на оплату")
+
+
+async def _wait_and_finalize_payment(bot: Bot, telegram_id: int, payment_id: str, months: int, final_price: int):
+    """Опрашивает статус платежа RollyPay и, при успехе, продлевает подписку — та же логика, что раньше была в process_successful_payment."""
+    status = await poll_payment_until_final(payment_id)
+    if status != "paid":
+        if status in ("expired", "canceled"):
+            await bot.send_message(telegram_id, "❌ Оплата не поступила (истекла или отменена).")
+        return
+
+    try:
+        user = await get_user(telegram_id)
+        if not user:
+            return
+
+        now = datetime.utcnow()
+        action_type = "продлена" if user.subscription_end > now else "куплена"
+        success = await update_subscription(telegram_id, months)
+        suffix = "месяц" if months == 1 else "месяца" if months in (2,3,4) else "месяцев"
+
+        if success:
+            updated_user = await get_user(telegram_id)
+            if updated_user and updated_user.awg_profile_data:
+                try:
+                    profile_data = safe_json_loads(updated_user.awg_profile_data, default={})
+                    client_id = profile_data.get("client_id")
+                    if client_id:
+                        await set_client_enabled(client_id, True)
+                except Exception as e:
+                    logger.error(f"🛑 Error re-enabling client after payment: {e}")
+
+            await bot.send_message(
+                telegram_id,
+                f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
+                "Спасибо за покупку! 🎉"
+            )
+
+            for admin_id in config.ADMINS:
+                try:
+                    await bot.send_message(
+                        admin_id,
+                        f"{action_type.capitalize()} подписка пользователем "
+                        f"`{user.full_name}` | `{user.telegram_id}` "
+                        f"на {months} {suffix} - {final_price}₽ (RollyPay)"
+                    )
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.error(f"🛑 Error finalizing RollyPay payment: {e}")
 
 @router.pre_checkout_query()
 async def process_pre_checkout_query(pre_checkout_query: PreCheckoutQuery, bot: Bot):

@@ -9,6 +9,9 @@ class Config(BaseModel):
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
     ADMINS: List[int] = Field(default_factory=list)
     PAYMENT_TOKEN: str = os.getenv("PAYMENT_TOKEN", "")
+    ROLLYPAY_API_KEY: str = os.getenv("ROLLYPAY_API_KEY", "")
+    ROLLYPAY_TERMINAL_ID: str = os.getenv("ROLLYPAY_TERMINAL_ID", "")
+    ROLLYPAY_SIGNING_SECRET: str = os.getenv("ROLLYPAY_SIGNING_SECRET", "")
 
     # Настройки цен и скидок
     PRICES: Dict[int, Dict[str, int]] = {
