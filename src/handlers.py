@@ -241,27 +241,9 @@ async def connect_cmd(message: Message, bot: Bot):
         await message.answer("⚠️ У вас пока нет созданного профиля.")
         return
 
-    config_file = BufferedInputFile(
-        profile_data["config"].encode("utf-8"),
-        filename="vpn.conf",
-    )
-
-    text = (
-        "📲 Как подключить VPN\n\n"
-        "1. Установите приложение AmneziaWG (App Store / Google Play), если ещё не установлено\n"
-        "2. Откройте файл vpn.conf, приложенный выше — приложение AmneziaWG предложит импортировать его\n"
-        "3. Подтвердите импорт и включите тоннель внутри приложения\n\n"
-        "✅ Готово — VPN включён, интернет работает без ограничений 🚀"
-    )
-
-    builder = InlineKeyboardBuilder()
-    builder.button(text="⬅️ В меню", callback_data="back_to_menu")
-    builder.adjust(1)
-
-    await message.answer_document(
-        document=config_file,
-        caption=text,
-        reply_markup=builder.as_markup(),
+    await message.answer(
+        PLATFORM_PROMPT,
+        reply_markup=platform_keyboard(),
     )
 
     await message.answer(
@@ -848,31 +830,9 @@ async def connect_profile(callback: CallbackQuery):
         await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
         return
 
-    config_file = BufferedInputFile(
-        profile_data["config"].encode("utf-8"),
-        filename="vpn.conf",
-    )
-
-    text = (
-        "📲 Как подключить VPN\n\n"
-        "1. Установите приложение AmneziaWG (App Store / Google Play), если ещё не установлено\n"
-        "2. Откройте файл vpn.conf, приложенный выше — приложение AmneziaWG предложит импортировать его\n"
-        "3. Подтвердите импорт и включите тоннель внутри приложения\n\n"
-        "✅ Готово — VPN включён, интернет работает без ограничений 🚀"
-    )
-
-    builder = InlineKeyboardBuilder()
-    builder.button(text="⬅️ Назад", callback_data="back_to_menu")
-    builder.adjust(1)
-
-    await callback.message.answer_document(
-        document=config_file,
-        caption=text,
-        reply_markup=builder.as_markup(),
-    )
     await callback.message.answer(
-        f"<pre>{html.escape(profile_data['vpn_link'])}</pre>",
-        parse_mode="HTML",
+        PLATFORM_PROMPT,
+        reply_markup=platform_keyboard(),
     )
     await callback.message.delete()
 
@@ -1166,3 +1126,150 @@ async def admin_reply_to_support(message: Message, bot: Bot):
     except Exception as e:
         logger.error(f"🛑 Failed to send admin reply to user {target_id}: {e}")
         await message.answer("❌ Не удалось отправить ответ пользователю.")
+
+
+PLATFORM_PROMPT = "🔌 Выберите вашу платформу:"
+
+APP_LINKS = {
+    "ios": ("📥 Установить DefaultVPN", "https://apps.apple.com/app/defaultvpn/id6744725017"),
+    "android": ("📥 Установить AmneziaWG", "https://play.google.com/store/apps/details?id=org.amnezia.awg"),
+    "windows": ("📥 Скачать AmneziaWG", "https://github.com/amnezia-vpn/amneziawg-windows-client/releases/download/3.1.0/amneziawg-amd64-3.1.0.msi"),
+    "macos": ("📥 Установить AmneziaWG", "https://apps.apple.com/app/amneziawg/id6478942365"),
+    "linux": ("📥 Скачать AmneziaVPN", "https://github.com/amnezia-vpn/amnezia-client/releases/latest"),
+}
+
+PLATFORM_TEXTS = {
+    "ios": (
+        "📱 <b>Подключение на iPhone / iPad</b>\n\n"
+        "1. Установите DefaultVPN по кнопке ниже\n"
+        "2. Скопируйте ключ — нажмите и удерживайте текст под инструкцией\n"
+        "3. В приложении нажмите ➕ → «Вставить» → «Добавить» → «Подключить»\n\n"
+        "✅ Готово"
+    ),
+    "android": (
+        "🤖 <b>Подключение на Android</b>\n\n"
+        "1. Установите AmneziaWG по кнопке ниже\n"
+        "2. Откройте файл vpn.conf из сообщения ниже — приложение предложит импорт\n"
+        "3. Подтвердите импорт и включите тоннель\n\n"
+        "✅ Готово"
+    ),
+    "windows": (
+        "🪟 <b>Подключение на Windows</b>\n\n"
+        "1. Скачайте и установите AmneziaWG по кнопке ниже\n"
+        "2. Сохраните файл vpn.conf из сообщения ниже\n"
+        "3. В приложении нажмите «Import tunnel(s) from file» и выберите этот файл\n"
+        "4. Нажмите «Connect»\n\n"
+        "✅ Готово"
+    ),
+    "macos": (
+        "🍎 <b>Подключение на macOS</b>\n\n"
+        "1. Установите AmneziaWG по кнопке ниже\n"
+        "2. Сохраните файл vpn.conf из сообщения ниже\n"
+        "3. В приложении нажмите «Import tunnel(s) from file» и выберите этот файл\n"
+        "4. Нажмите «Connect»\n\n"
+        "✅ Готово"
+    ),
+    "linux": (
+        "🐧 <b>Подключение на Linux</b>\n\n"
+        "1. Скачайте AmneziaVPN (.run) по кнопке ниже и запустите установщик\n"
+        "2. Добавьте подключение: файлом vpn.conf или ключом из сообщения ниже\n"
+        "3. Нажмите «Подключить»\n\n"
+        "⚠️ Не отключайте IPv6 в системе — иначе кнопка подключения не работает\n\n"
+        "✅ Готово"
+    ),
+}
+
+
+def platform_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📱 iPhone / iPad", callback_data="plat_ios")
+    builder.button(text="🤖 Android", callback_data="plat_android")
+    builder.button(text="🪟 Windows", callback_data="plat_windows")
+    builder.button(text="🍎 macOS", callback_data="plat_macos")
+    builder.button(text="🐧 Linux", callback_data="plat_linux")
+    builder.button(text="⬅️ В меню", callback_data="back_to_menu")
+    builder.adjust(2, 2, 1, 1)
+    return builder.as_markup()
+
+
+def quoted_key(link: str) -> str:
+    """vpn:// в свёрнутой цитате — копируется долгим тапом."""
+    return f"<blockquote expandable>{html.escape(link)}</blockquote>"
+
+
+@router.callback_query(F.data.startswith("plat_"))
+async def platform_instructions(callback: CallbackQuery):
+    await callback.answer()
+    platform = callback.data.split("_", 1)[1]
+    if platform not in PLATFORM_TEXTS:
+        return
+
+    user = await get_user(callback.from_user.id)
+    if not user or not user.awg_profile_data:
+        await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
+        return
+
+    profile_data = safe_json_loads(user.awg_profile_data, default={})
+    config_text = profile_data.get("config")
+    vpn_link = profile_data.get("vpn_link")
+    if not config_text:
+        await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
+        return
+
+    label, url = APP_LINKS[platform]
+    builder = InlineKeyboardBuilder()
+    builder.button(text=label, url=url)
+    if platform in ("ios", "android"):
+        builder.button(text="📷 Показать QR-код", callback_data=f"qr_{platform}")
+    builder.button(text="⬅️ В меню", callback_data="back_to_menu")
+    builder.adjust(1)
+
+    await callback.message.answer(
+        PLATFORM_TEXTS[platform],
+        reply_markup=builder.as_markup(),
+        parse_mode="HTML",
+    )
+
+    if platform == "ios":
+        if vpn_link:
+            await callback.message.answer(quoted_key(vpn_link), parse_mode="HTML")
+    else:
+        config_file = BufferedInputFile(config_text.encode("utf-8"), filename="vpn.conf")
+        await callback.message.answer_document(document=config_file)
+        if platform == "linux" and vpn_link:
+            await callback.message.answer(quoted_key(vpn_link), parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("qr_"))
+async def platform_qr(callback: CallbackQuery):
+    await callback.answer()
+    platform = callback.data.split("_", 1)[1]
+
+    user = await get_user(callback.from_user.id)
+    if not user or not user.awg_profile_data:
+        await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
+        return
+
+    profile_data = safe_json_loads(user.awg_profile_data, default={})
+    # AmneziaWG (Android) читает QR с текстом .conf, DefaultVPN (iOS) — с vpn:// ссылкой
+    payload = profile_data.get("vpn_link") if platform == "ios" else profile_data.get("config")
+    if not payload:
+        await callback.message.answer("⚠️ Не удалось сформировать QR-код.")
+        return
+
+    try:
+        qr = qrcode.QRCode(box_size=8, border=4)
+        qr.add_data(payload)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        photo = BufferedInputFile(buf.getvalue(), filename="qr.png")
+        await callback.message.answer_photo(
+            photo=photo,
+            caption="📷 Отсканируйте этот QR-код камерой в приложении на другом устройстве",
+        )
+    except Exception as e:
+        logger.error(f"🛑 QR generation failed: {e}")
+        await callback.message.answer("⚠️ Не удалось сформировать QR-код.")
