@@ -199,6 +199,8 @@ async def start_purchase_flow(message: Message, bot: Bot, months: int, platform:
 
     builder = InlineKeyboardBuilder()
     builder.button(text="\U0001f4b3 Оплатить", url=pay_url)
+    builder.button(text="\U0001f3e0 В меню", callback_data="back_to_menu")
+    builder.adjust(1)
     await message.answer(
         f"Счёт на {final_price}\u20bd за {months} {suffix}.\nНажмите кнопку ниже, чтобы оплатить:",
         reply_markup=builder.as_markup(),
@@ -440,6 +442,8 @@ async def process_payment(callback: CallbackQuery, bot: Bot):
 
         builder = InlineKeyboardBuilder()
         builder.button(text="💳 Оплатить", url=pay_url)
+        builder.button(text="🏠 В меню", callback_data="back_to_menu")
+        builder.adjust(1)
         await callback.message.answer(
             f"Счёт на {final_price}₽ создан.\nНажмите кнопку ниже, чтобы оплатить:",
             reply_markup=builder.as_markup()
@@ -482,10 +486,17 @@ async def _wait_and_finalize_payment(bot: Bot, telegram_id: int, payment_id: str
                 except Exception as e:
                     logger.error(f"🛑 Error re-enabling client after payment: {e}")
 
+            done_kb = InlineKeyboardBuilder()
+            if not platform:
+                done_kb.button(text="✅ Подключить", callback_data="connect")
+            done_kb.button(text="🏠 В меню", callback_data="back_to_menu")
+            done_kb.adjust(1)
+
             await bot.send_message(
                 telegram_id,
                 f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
-                "Спасибо за покупку! 🎉"
+                "Спасибо за покупку! 🎉",
+                reply_markup=done_kb.as_markup()
             )
 
             if platform:
@@ -866,6 +877,7 @@ async def handle_delete_static_profile(callback: CallbackQuery):
 
 @router.callback_query(F.data == "connect")
 async def connect_profile(callback: CallbackQuery):
+    await callback.answer()
     user = await get_user(callback.from_user.id)
     if not user:
         await callback.answer("🛑 Ошибка профиля")
@@ -895,11 +907,16 @@ async def connect_profile(callback: CallbackQuery):
         await callback.message.answer("⚠️ У вас пока нет созданного профиля.")
         return
 
-    await callback.message.answer(
-        PLATFORM_PROMPT,
-        reply_markup=platform_keyboard(),
-    )
-    await callback.message.delete()
+    try:
+        await callback.message.edit_text(
+            PLATFORM_PROMPT,
+            reply_markup=platform_keyboard(),
+        )
+    except Exception:
+        await callback.message.answer(
+            PLATFORM_PROMPT,
+            reply_markup=platform_keyboard(),
+        )
 
 @router.callback_query(F.data == "stats")
 async def user_stats(callback: CallbackQuery):
@@ -943,7 +960,10 @@ async def user_stats(callback: CallbackQuery):
     )
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад", callback_data="back_to_menu")
-    await callback.message.answer(text, parse_mode='Markdown', reply_markup=builder.as_markup())
+    try:
+        await callback.message.edit_text(text, parse_mode='Markdown', reply_markup=builder.as_markup())
+    except Exception:
+        await callback.message.answer(text, parse_mode='Markdown', reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "admin_network_stats")
 async def network_stats(callback: CallbackQuery):
@@ -1286,14 +1306,22 @@ async def platform_instructions(callback: CallbackQuery):
     builder.button(text=label, url=url)
     if platform in ("ios", "android"):
         builder.button(text="📷 Показать QR-код", callback_data=f"qr_{platform}")
-    builder.button(text="⬅️ В меню", callback_data="back_to_menu")
-    builder.adjust(1)
+    builder.button(text="⬅️ Назад", callback_data="connect")
+    builder.button(text="🏠 В меню", callback_data="back_to_menu")
+    builder.adjust(1, 1, 2)
 
-    await callback.message.answer(
-        PLATFORM_TEXTS[platform],
-        reply_markup=builder.as_markup(),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            PLATFORM_TEXTS[platform],
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
+    except Exception:
+        await callback.message.answer(
+            PLATFORM_TEXTS[platform],
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML",
+        )
 
     if platform == "ios":
         if vpn_link:
@@ -1364,8 +1392,9 @@ async def send_platform_instructions(message: Message, user, platform: str):
     builder.button(text=label, url=url)
     if platform in ("ios", "android"):
         builder.button(text="\U0001f4f7 Показать QR-код", callback_data=f"qr_{platform}")
-    builder.button(text="\u2b05\ufe0f В меню", callback_data="back_to_menu")
-    builder.adjust(1)
+    builder.button(text="\u2b05\ufe0f Назад", callback_data="connect")
+    builder.button(text="\U0001f3e0 В меню", callback_data="back_to_menu")
+    builder.adjust(1, 1, 2)
 
     await message.answer(
         PLATFORM_TEXTS[platform],
@@ -1445,6 +1474,8 @@ async def handle_webapp_data(message: Message, bot: Bot):
 
     builder = InlineKeyboardBuilder()
     builder.button(text="\U0001f4b3 Оплатить", url=pay_url)
+    builder.button(text="\U0001f3e0 В меню", callback_data="back_to_menu")
+    builder.adjust(1)
     await message.answer(
         f"Счёт на {final_price}\u20bd за {months} {suffix}.\nНажмите кнопку ниже, чтобы оплатить:",
         reply_markup=builder.as_markup(),
@@ -1478,8 +1509,9 @@ async def send_platform_instructions_to(bot: Bot, chat_id: int, user, platform: 
     builder.button(text=label, url=url)
     if platform in ("ios", "android"):
         builder.button(text="\U0001f4f7 Показать QR-код", callback_data=f"qr_{platform}")
-    builder.button(text="\u2b05\ufe0f В меню", callback_data="back_to_menu")
-    builder.adjust(1)
+    builder.button(text="\u2b05\ufe0f Назад", callback_data="connect")
+    builder.button(text="\U0001f3e0 В меню", callback_data="back_to_menu")
+    builder.adjust(1, 1, 2)
 
     await bot.send_message(chat_id, PLATFORM_TEXTS[platform], reply_markup=builder.as_markup(), parse_mode="HTML")
 
