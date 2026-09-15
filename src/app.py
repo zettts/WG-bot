@@ -99,7 +99,6 @@ async def setup_bot_commands(bot: Bot):
     from aiogram.types import BotCommand
     
     commands = [
-        BotCommand(command="start", description="🚀 Запуск бота"),
         BotCommand(command="menu", description="📋 Главное меню"),
         BotCommand(command="renew", description="💵 Продлить подписку"),
         BotCommand(command="connect", description="✅ Подключить VPN"),
