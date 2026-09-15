@@ -45,6 +45,10 @@ class AdminStates(StatesGroup):
     DELETE_USER = State()
     EDIT_PRICING = State()
 
+
+class UserStates(StatesGroup):
+    WAITING_SUPPORT_MESSAGE = State()
+
 def split_text(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list:
     """Разбивает текст на части указанной максимальной длины"""
     if len(text) <= max_length:
@@ -87,8 +91,12 @@ async def show_menu(bot: Bot, chat_id: int, message_id: int = None):
     
     if user.is_admin:
         builder.button(text="⚠️ Админ. меню", callback_data="admin_menu")
-    
-    builder.adjust(2, 2, 1)
+
+    builder.button(text="🆘 Служба поддержки", callback_data="support")
+    builder.button(text="📄 Политика конфиденциальности", url="https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-08-12-99")
+    builder.button(text="📋 Пользовательское соглашение", url="https://telegra.ph/PUBLICHNAYA-OFERTA-08-12-15")
+
+    builder.adjust(2, 2, 1, 1, 2)
     
     if message_id:
         # Редактируем существующее сообщение
@@ -1115,3 +1123,30 @@ async def edit_price_process(message: Message, state: FSMContext):
         await message.answer(f"✅ Цена для тарифа {months} мес. обновлена: {new_price}₽")
     else:
         await message.answer("🛑 Не удалось обновить цену — тариф не найден.")
+
+@router.callback_query(F.data == "support")
+async def support_request(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await callback.message.answer(
+        "🆘 Напишите ваш вопрос одним сообщением — он будет передан в поддержку."
+    )
+    await state.set_state(UserStates.WAITING_SUPPORT_MESSAGE)
+
+
+@router.message(UserStates.WAITING_SUPPORT_MESSAGE)
+async def support_message(message: Message, state: FSMContext, bot: Bot):
+    await state.clear()
+    user = await get_user(message.from_user.id)
+    user_label = f"@{user.username}" if user and user.username else (user.full_name if user else str(message.from_user.id))
+
+    for admin_id in config.ADMINS:
+        try:
+            await bot.send_message(
+                admin_id,
+                f"🆘 Вопрос в поддержку от {user_label} (`{message.from_user.id}`):\n\n{message.text}",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"🛑 Failed to forward support message to admin {admin_id}: {e}")
+
+    await message.answer("✅ Сообщение отправлено в поддержку, вам ответят в этом чате.")
