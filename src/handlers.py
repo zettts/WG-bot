@@ -149,7 +149,64 @@ async def start_cmd(message: Message, bot: Bot):
             session.commit()
             logger.info(f"🔄 Updated user data: {message.from_user.id}")
     
+    # Параметр из Mini App: /start buy_<months>_<platform>
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) == 2 and parts[1].startswith("buy_"):
+        bits = parts[1].split("_")
+        if len(bits) == 3:
+            try:
+                months = int(bits[1])
+            except ValueError:
+                months = None
+            platform = bits[2]
+            if months and platform in PLATFORM_TEXTS:
+                await start_purchase_flow(message, bot, months, platform)
+                return
+
     await show_menu(bot, message.from_user.id)
+
+
+async def start_purchase_flow(message: Message, bot: Bot, months: int, platform: str):
+    """Обрабатывает выбор из Mini App: активная подписка -> инструкция, иначе -> счёт."""
+    user = await get_user(message.from_user.id)
+    if not user:
+        return
+
+    if user.subscription_end > datetime.utcnow():
+        await send_platform_instructions(message, user, platform)
+        return
+
+    pricing = await get_pricing()
+    if months not in pricing:
+        await show_menu(bot, message.from_user.id)
+        return
+
+    price_info = pricing[months]
+    final_price = calculate_final_price(price_info["base_price"], price_info["discount_percent"])
+    suffix = "месяц" if months == 1 else "месяца" if months in (2, 3, 4) else "месяцев"
+
+    order_id = f"sub_{message.from_user.id}_{months}_{int(datetime.utcnow().timestamp())}"
+    payment_id, pay_url = await create_payment(
+        amount_rub=f"{final_price}.00",
+        order_id=order_id,
+        description=f"VPN подписка на {months} {suffix}",
+        test=config.ROLLYPAY_TEST_MODE,
+    )
+
+    if not payment_id:
+        await message.answer("\u274c Оплата временно недоступна, попробуйте позже")
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="\U0001f4b3 Оплатить", url=pay_url)
+    await message.answer(
+        f"Счёт на {final_price}\u20bd за {months} {suffix}.\nНажмите кнопку ниже, чтобы оплатить:",
+        reply_markup=builder.as_markup(),
+    )
+
+    asyncio.create_task(
+        _wait_and_finalize_payment(bot, message.from_user.id, payment_id, months, final_price, platform)
+    )
 
 @router.message(Command("menu"))
 async def menu_cmd(message: Message, bot: Bot):
@@ -396,7 +453,7 @@ async def process_payment(callback: CallbackQuery, bot: Bot):
         await callback.message.answer("❌ Ошибка при создании счета на оплату")
 
 
-async def _wait_and_finalize_payment(bot: Bot, telegram_id: int, payment_id: str, months: int, final_price: int):
+async def _wait_and_finalize_payment(bot: Bot, telegram_id: int, payment_id: str, months: int, final_price: int, platform: str = None):
     """Опрашивает статус платежа RollyPay и, при успехе, продлевает подписку — та же логика, что раньше была в process_successful_payment."""
     status = await poll_payment_until_final(payment_id)
     if status != "paid":
@@ -430,6 +487,14 @@ async def _wait_and_finalize_payment(bot: Bot, telegram_id: int, payment_id: str
                 f"✅ Оплата прошла успешно! Ваша подписка {action_type} на {months} {suffix}.\n\n"
                 "Спасибо за покупку! 🎉"
             )
+
+            if platform:
+                fresh_user = await get_user(telegram_id)
+                if fresh_user:
+                    try:
+                        await send_platform_instructions_to(bot, telegram_id, fresh_user, platform)
+                    except Exception as e:
+                        logger.error(f"\U0001f6d1 Failed to send platform instructions: {e}")
 
             for admin_id in config.ADMINS:
                 try:
@@ -1388,3 +1453,41 @@ async def handle_webapp_data(message: Message, bot: Bot):
     asyncio.create_task(
         _wait_and_finalize_payment(bot, message.from_user.id, payment_id, months, final_price)
     )
+
+
+async def send_platform_instructions_to(bot: Bot, chat_id: int, user, platform: str):
+    """То же, что send_platform_instructions, но по chat_id (после оплаты)."""
+    profile_data = safe_json_loads(user.awg_profile_data, default={}) if user.awg_profile_data else {}
+    config_text = profile_data.get("config")
+    vpn_link = profile_data.get("vpn_link")
+
+    if not config_text:
+        profile_data = await create_awg_profile(user.telegram_id)
+        if not profile_data:
+            return
+        with Session() as session:
+            db_user = session.query(User).filter_by(telegram_id=user.telegram_id).first()
+            if db_user:
+                db_user.awg_profile_data = json.dumps(profile_data)
+                session.commit()
+        config_text = profile_data.get("config")
+        vpn_link = profile_data.get("vpn_link")
+
+    label, url = APP_LINKS[platform]
+    builder = InlineKeyboardBuilder()
+    builder.button(text=label, url=url)
+    if platform in ("ios", "android"):
+        builder.button(text="\U0001f4f7 Показать QR-код", callback_data=f"qr_{platform}")
+    builder.button(text="\u2b05\ufe0f В меню", callback_data="back_to_menu")
+    builder.adjust(1)
+
+    await bot.send_message(chat_id, PLATFORM_TEXTS[platform], reply_markup=builder.as_markup(), parse_mode="HTML")
+
+    if platform == "ios":
+        if vpn_link:
+            await bot.send_message(chat_id, quoted_key(vpn_link), parse_mode="HTML")
+    else:
+        config_file = BufferedInputFile(config_text.encode("utf-8"), filename="vpn.conf")
+        await bot.send_document(chat_id, document=config_file)
+        if platform == "linux" and vpn_link:
+            await bot.send_message(chat_id, quoted_key(vpn_link), parse_mode="HTML")
