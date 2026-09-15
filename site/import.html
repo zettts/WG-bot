@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Подключение...</title></head>
+<body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+<p>Открываем AmneziaVPN...</p>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const link = params.get('link');
+  if (link) {
+    window.location.href = link;
+  } else {
+    document.body.innerHTML = '<p>Ссылка не найдена.</p>';
+  }
+</script>
+</body>
+</html>

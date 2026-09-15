@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>TopVPN</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --blue-1:#0ea5e9; --blue-2:#2563eb; --blue-3:#1e40af;
+    --card:rgba(255,255,255,.12); --border:rgba(255,255,255,.22);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:linear-gradient(160deg,var(--blue-1) 0%,var(--blue-2) 55%,var(--blue-3) 100%);
+    background-attachment:fixed;
+    color:#fff; min-height:100vh;
+    padding:20px 18px calc(28px + env(safe-area-inset-bottom));
+  }
+  header{text-align:center;margin-bottom:26px}
+  .logo{width:84px;height:84px;margin:0 auto 14px;display:block}
+  h1{font-size:26px;font-weight:800;margin:0 0 8px;letter-spacing:-.4px}
+  .lead{font-size:15px;line-height:1.5;opacity:.9;margin:0}
+  h2{font-size:19px;font-weight:800;margin:0 0 14px}
+  section{margin-bottom:28px}
+  .card{
+    background:var(--card);border:1px solid var(--border);
+    border-radius:20px;padding:16px;backdrop-filter:blur(6px);
+  }
+  .tariffs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tariff{
+    background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:14px 12px;text-align:center;cursor:pointer;transition:.15s;position:relative;
+  }
+  .tariff.active{background:#fff;border-color:#fff;color:var(--blue-3)}
+  .tariff .term{font-size:14px;font-weight:700;opacity:.9}
+  .tariff.active .term{opacity:1}
+  .tariff .price{font-size:21px;font-weight:800;margin-top:4px}
+  .tariff .per{font-size:12px;opacity:.75;margin-top:2px}
+  .badge{
+    position:absolute;top:-8px;right:8px;background:#fbbf24;color:#3b2503;
+    font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;
+  }
+  .os-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .os{
+    background:var(--card);border:1px solid var(--border);border-radius:16px;
+    padding:13px 10px;text-align:center;font-weight:700;font-size:14px;cursor:pointer;transition:.15s;
+  }
+  .os.active{background:#fff;border-color:#fff;color:var(--blue-3)}
+  .os.wide{grid-column:1 / -1}
+  .steps{margin:14px 0 0;padding-left:20px;font-size:14px;line-height:1.65}
+  .steps li{margin-bottom:6px}
+  .note{font-size:13px;opacity:.85;margin-top:10px;line-height:1.5}
+  .btn{
+    display:block;width:100%;text-align:center;text-decoration:none;
+    padding:15px 18px;border-radius:16px;font-weight:800;font-size:16px;
+    border:none;cursor:pointer;font-family:inherit;
+  }
+  .btn-white{background:#fff;color:var(--blue-2);box-shadow:0 8px 22px rgba(0,0,0,.18)}
+  .btn-ghost{background:rgba(255,255,255,.14);border:1px solid var(--border);color:#fff}
+  .btn + .btn{margin-top:10px}
+  .hidden{display:none}
+  footer{text-align:center;font-size:13px;opacity:.8;padding-top:6px}
+  footer a{color:#fff;text-decoration:underline;margin:0 8px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="logo.png" alt="TopVPN" />
+  <h1>TopVPN</h1>
+  <p class="lead">Быстрый доступ без ограничений.<br/>Работает там, где остальные не проходят.</p>
+</header>
+
+<section>
+  <h2>Тариф</h2>
+  <div class="tariffs" id="tariffs">
+    <div class="tariff" data-months="1"><div class="term">1 месяц</div><div class="price">500 ₽</div><div class="per">500 ₽/мес</div></div>
+    <div class="tariff" data-months="3"><span class="badge">−10%</span><div class="term">3 месяца</div><div class="price">1350 ₽</div><div class="per">450 ₽/мес</div></div>
+    <div class="tariff" data-months="6"><span class="badge">−20%</span><div class="term">6 месяцев</div><div class="price">2400 ₽</div><div class="per">400 ₽/мес</div></div>
+    <div class="tariff" data-months="12"><span class="badge">−30%</span><div class="term">12 месяцев</div><div class="price">4200 ₽</div><div class="per">350 ₽/мес</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Устройство</h2>
+  <div class="os-grid" id="osGrid">
+    <div class="os" data-os="ios">📱 iPhone / iPad</div>
+    <div class="os" data-os="android">🤖 Android</div>
+    <div class="os" data-os="windows">🪟 Windows</div>
+    <div class="os" data-os="macos">🍎 macOS</div>
+    <div class="os wide" data-os="linux">🐧 Linux</div>
+  </div>
+
+  <div class="card hidden" id="osCard" style="margin-top:12px">
+    <div id="osSteps"></div>
+    <a class="btn btn-ghost" id="appLink" href="#" target="_blank" rel="noopener" style="margin-top:14px">Установить приложение</a>
+  </div>
+</section>
+
+<section>
+  <button class="btn btn-white" id="connectBtn">Подключить</button>
+  <p class="note" id="connectNote">Выберите тариф и устройство — доступ придёт в чат с ботом.</p>
+</section>
+
+<footer>
+  <a href="https://telegra.ph/POLITIKA-KONFIDENCIALNOSTI-08-12-99" target="_blank" rel="noopener">Конфиденциальность</a>
+  <a href="https://telegra.ph/PUBLICHNAYA-OFERTA-08-12-15" target="_blank" rel="noopener">Оферта</a>
+</footer>
+
+<script>
+(function(){
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
+
+  var APPS = {
+    ios:     {name:"DefaultVPN",  url:"https://apps.apple.com/app/defaultvpn/id6744725017"},
+    android: {name:"AmneziaWG",   url:"https://play.google.com/store/apps/details?id=org.amnezia.awg"},
+    windows: {name:"AmneziaWG",   url:"https://github.com/amnezia-vpn/amneziawg-windows-client/releases/download/3.1.0/amneziawg-amd64-3.1.0.msi"},
+    macos:   {name:"AmneziaWG",   url:"https://apps.apple.com/app/amneziawg/id6478942365"},
+    linux:   {name:"AmneziaVPN",  url:"https://github.com/amnezia-vpn/amnezia-client/releases/latest"}
+  };
+
+  var STEPS = {
+    ios: ["Установите DefaultVPN","Скопируйте ключ из чата с ботом","В приложении: + -> «Вставить» -> «Добавить» -> «Подключить»"],
+    android: ["Установите AmneziaWG","Откройте файл vpn.conf из чата с ботом","Подтвердите импорт и включите тоннель"],
+    windows: ["Скачайте и установите AmneziaWG","Сохраните файл vpn.conf из чата с ботом","В приложении: «Import tunnel(s) from file» -> выберите файл -> «Connect»"],
+    macos: ["Установите AmneziaWG","Сохраните файл vpn.conf из чата с ботом","В приложении: «Import tunnel(s) from file» -> выберите файл -> «Connect»"],
+    linux: ["Скачайте AmneziaVPN (.run) и запустите установщик","Добавьте подключение файлом vpn.conf или ключом из чата","Нажмите «Подключить»"]
+  };
+
+  var NOTES = { linux: "Не отключайте IPv6 в системе — иначе кнопка подключения не работает." };
+
+  var months = null, os = null;
+
+  function findParent(node, cls){
+    while (node && node !== document) {
+      if (node.nodeType === 1 && node.classList && node.classList.contains(cls)) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function bindPicker(containerId, cls, attr, cb){
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    container.addEventListener("click", function(ev){
+      var el = findParent(ev.target, cls);
+      if (!el) return;
+      var all = container.getElementsByClassName(cls);
+      for (var i = 0; i < all.length; i++) all[i].classList.remove("active");
+      el.classList.add("active");
+      try { if (tg && tg.HapticFeedback) tg.HapticFeedback.selectionChanged(); } catch(e){}
+      cb(el.getAttribute(attr));
+    });
+  }
+
+  bindPicker("tariffs", "tariff", "data-months", function(v){ months = v; });
+
+  bindPicker("osGrid", "os", "data-os", function(v){
+    os = v;
+    var card = document.getElementById("osCard");
+    var list = "";
+    for (var i = 0; i < STEPS[v].length; i++) list += "<li>" + STEPS[v][i] + "</li>";
+    var note = NOTES[v] ? '<p class="note">' + NOTES[v] + "</p>" : "";
+    document.getElementById("osSteps").innerHTML = "<ol class='steps'>" + list + "</ol>" + note;
+    var link = document.getElementById("appLink");
+    link.href = APPS[v].url;
+    link.textContent = "Установить " + APPS[v].name;
+    card.classList.remove("hidden");
+  });
+
+  function notify(msg){
+    try { if (tg && tg.showAlert) { tg.showAlert(msg); return; } } catch(e){}
+    alert(msg);
+  }
+
+  var btn = document.getElementById("connectBtn");
+  btn.addEventListener("click", function(){
+    if (!months) { notify("Выберите тариф"); return; }
+    if (!os) { notify("Выберите устройство"); return; }
+
+    var param = "buy_" + months + "_" + os;
+    var link = "https://t.me/GetTopVPN_bot?start=" + param;
+
+    if (tg && typeof tg.openTelegramLink === "function") {
+      try {
+        tg.openTelegramLink(link);
+        if (typeof tg.close === "function") setTimeout(function(){ tg.close(); }, 300);
+        return;
+      } catch (err) {}
+    }
+    window.location.href = link;
+  });
+})();
+</script>
+</body>
+</html>
