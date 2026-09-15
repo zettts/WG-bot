@@ -1157,7 +1157,7 @@ async def support_message(message: Message, state: FSMContext, bot: Bot):
 async def admin_reply_to_support(message: Message, bot: Bot):
     if message.from_user.id not in config.ADMINS:
         return
-    match = re.search(r"Вопрос в поддержку от .+ \(`(\d+)`\)", message.reply_to_message.text or "")
+    match = re.search(r"Вопрос в поддержку от .+? \((\d+)\)", message.reply_to_message.text or "")
     if not match:
         return
     target_id = int(match.group(1))
